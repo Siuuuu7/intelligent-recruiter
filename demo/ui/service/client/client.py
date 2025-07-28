@@ -24,6 +24,8 @@ from service.types import (
     AgentClientJSONError,
     JSONRPCRequest,
     Conversation,
+    SendMessageWithFileRequest,
+    SendMessageWithFileResponse,
 )
 import json
 
@@ -47,6 +49,9 @@ class ConversationClient:
         raise AgentClientHTTPError(e.response.status_code, str(e)) from e
       except json.JSONDecodeError as e:
         raise AgentClientJSONError(str(e)) from e
+
+  async def send_message_with_file(self, payload: SendMessageWithFileRequest) -> SendMessageWithFileResponse:
+    return SendMessageWithFileResponse(**await self._send_request(payload))
 
   async def create_conversation(self, payload: CreateConversationRequest) -> CreateConversationResponse:
     return CreateConversationResponse(**await self._send_request(payload))

@@ -7,7 +7,7 @@ import functools
 import threading
 import httpx  # << NEW: import for sending HTTP requests
 
-from state.host_agent_service import pick_agent_using_chatgpt
+from state.host_agent_service import SendMessageWithFile, pick_agent_using_chatgpt
 from state.state import AppState, SettingsState, StateMessage
 from state.host_agent_service import SendMessage, ListConversations, convert_message_to_state
 from .chat_bubble import chat_bubble
@@ -121,8 +121,15 @@ async def send_message(message: str, message_id: str = ""):
     # --- 6. Send the Request to the Backend ---
     print(f"Sending message content to backend via SendMessage for conversation {conv_id_to_use}.")
     try:
-        await SendMessage(backend_request)
-        print(f"SendMessage call completed for conversation {conv_id_to_use}.")
+        if message_id in uploaded_files:
+            file_path = uploaded_files.pop(message_id)
+            await SendMessageWithFile(backend_request, file_path)
+            print(f"SendMessageWithFile call completed for conversation {conv_id_to_use}.")
+        else:
+            await SendMessage(backend_request)
+            print(f"SendMessage call completed for conversation {conv_id_to_use}.")
+        # await SendMessage(backend_request)
+        # print(f"SendMessage call completed for conversation {conv_id_to_use}.")
     except Exception as e:
         print(f"[ERROR] Failed to send message via SendMessage: {e}")
         # Optionally, update UI to show an error state?
@@ -133,23 +140,61 @@ async def send_message(message: str, message_id: str = ""):
 
 async def send_message_enter(e: me.InputEnterEvent):
     """Send message on Enter key."""
-    state = me.state(PageState)
     app_state = me.state(AppState)
+    page_state = me.state(PageState)
+
+    user_input = e.value.strip()
+    if not user_input:
+        return
+
     message_id = str(uuid.uuid4())
     app_state.background_tasks[message_id] = ""
 
-    await send_message(state.message_content, message_id)
+    await send_message(user_input, message_id)
     yield
 
 async def send_message_button(e: me.ClickEvent):
     """Send message on Send button."""
-    yield
-    state = me.state(PageState)
     app_state = me.state(AppState)
+    page_state = me.state(PageState)
+
+    user_input = page_state.message_content.strip()  # 如果你绑定的是 on_blur，得提前 blur 一次
+    if not user_input:
+        return
+
     message_id = str(uuid.uuid4())
     app_state.background_tasks[message_id] = ""
-    await send_message(state.message_content, message_id)
+
+    await send_message(user_input, message_id)
     yield
+
+uploaded_files = {}  # 临时缓存上传的文件，key 是 session/thread/message_id
+
+def handle_upload(e: me.UploadEvent):
+    """Handle file upload event."""
+    print(f"[UPLOAD] Received file: {e.file.name}")
+    page_state = me.state(PageState)
+    app_state = me.state(AppState)
+    message_id = str(uuid.uuid4())  # 可选：如果你希望上传后立即生成一个 message ID
+
+    # 保存文件到本地临时目录
+    file_path = f"/resume/{message_id}_{e.file.name}"
+    try:
+        with open(file_path, "wb") as f:
+            f.write(e.file.getvalue())  # Use getvalue() method for file content
+        
+        uploaded_files[message_id] = file_path  # 保存路径，稍后 send_message 会用到
+
+        # 可以在 UI 上显示一下文件已上传
+        app_state.messages.append(StateMessage(
+            message_id=message_id,
+            role="user",
+            content=[(f"[Uploaded file: {e.file.name}]", "text/plain")],
+            metadata={"conversation_id": page_state.conversation_id}
+        ))
+        print(f"[UPLOAD] File saved successfully: {file_path}")
+    except Exception as ex:
+        print(f"[ERROR] Failed to save uploaded file: {ex}")
 
 @me.component
 def conversation():
@@ -223,6 +268,15 @@ def conversation():
                 on_enter=send_message_enter,
                 style=me.Style(min_width="80vw"),
             )
+
+            # Fixed: Use me.uploader instead of me.upload
+            me.uploader(
+                label="Upload File",
+                accepted_file_types=[".pdf", ".txt", ".docx", ".csv"],  # Use accepted_file_types parameter
+                on_upload=handle_upload,
+                style=me.Style(width=150),
+            )
+
             with me.content_button(
                 type="flat",
                 on_click=send_message_button,

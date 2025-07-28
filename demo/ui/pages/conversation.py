@@ -14,3 +14,10 @@ def conversation_page(app_state: AppState):
         with page_frame():
           with header("Conversation", "chat"): pass
           conversation()
+def handle_file_upload(e: me.UploadEvent):
+    state = me.state(AppState)
+    state.uploaded_file = {
+        "name": e.file.name,
+        "content": e.file.read(),
+        "mime_type": e.file.mimeType
+    }

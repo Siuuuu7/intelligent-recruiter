@@ -22,7 +22,8 @@ from service.types import (
     ListTaskResponse,
     RegisterAgentResponse,
     ListAgentResponse,
-    GetEventResponse
+    GetEventResponse,
+    SendMessageWithFileResponse
 )
 
 class ConversationServer:
@@ -58,6 +59,11 @@ class ConversationServer:
         "/message/send",
         self._send_message,
         methods=["POST"])
+    router.add_api_route(
+        "/message/send_with_file",
+        self._send_message_with_file,
+        methods=["POST"])
+
     router.add_api_route(
         "/events/get",
         self._get_events,
@@ -99,6 +105,26 @@ class ConversationServer:
   async def _create_conversation(self):
     c = self.manager.create_conversation()
     return CreateConversationResponse(result=c).model_dump()
+  async def _send_message_with_file(self, request: Request):
+    message_data = await request.json()
+    message = Message(**message_data['params'])
+    message = self.manager.sanitize_message(message)
+
+    # 储存 message 到会话里
+    conversation_id = message.metadata.get("conversation_id")
+    if conversation_id:
+      conv = self.manager.get_conversation(conversation_id)
+      if conv:
+        conv.messages.append(message)
+
+    # 处理可能的文件（你可以在此处理文件缓存逻辑）
+    t = threading.Thread(target=lambda: asyncio.run(self.manager.process_message(message)))
+    t.start()
+
+    return SendMessageWithFileResponse(result=MessageInfo(
+      message_id=message.metadata.get('message_id'),
+      conversation_id=conversation_id,
+    ))
 
   async def _send_message(self, request: Request):
     message_data = await request.json()

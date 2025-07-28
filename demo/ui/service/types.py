@@ -39,6 +39,13 @@ class MessageInfo(BaseModel):
   message_id: str
   conversation_id: str
 
+class SendMessageWithFileRequest(JSONRPCRequest):
+  method: Literal["message/send_with_file"] = "message/send_with_file"
+  params: Message
+
+class SendMessageWithFileResponse(JSONRPCResponse):
+  result: MessageInfo | None = None
+
 class SendMessageResponse(JSONRPCResponse):
   result: Message | MessageInfo | None = None
 

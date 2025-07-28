@@ -60,7 +60,9 @@ class RemoteAgentConnections:
             m.metadata['last_message_id'] = m.metadata['message_id']
           m.metadata['message_id'] = str(uuid.uuid4())
         
-        if response.result and response.result.status and response.result.status.message:
+        if response.result and (hasattr(response.result, 'status') and
+            hasattr(response.result.status, 'message') and
+            response.result.status.message):
             if isinstance(response.result.status.message, dict):
                 role = response.result.status.message.get("role")
                 if role == "model":

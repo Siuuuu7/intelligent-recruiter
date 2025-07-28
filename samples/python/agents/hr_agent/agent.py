@@ -25,38 +25,6 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# region Plugin
-
-class CurrencyPlugin:
-    """A simple currency plugin that leverages Frankfurter for exchange rates.
-    
-    The Plugin is used by the `currency_exchange_agent`.
-    """
-
-    @kernel_function(description="Retrieves exchange rate between currency_from and currency_to using Frankfurter API")
-    def get_exchange_rate(
-        self,
-        currency_from: Annotated[str, "Currency code to convert from, e.g. USD"],
-        currency_to: Annotated[str, "Currency code to convert to, e.g. EUR or INR"],
-        date: Annotated[str, "Date or 'latest'"] = "latest",
-    ) -> str:
-        try:
-            response = httpx.get(
-                f"https://api.frankfurter.app/{date}", params={"from": currency_from, "to": currency_to}, timeout=10.0
-            )
-            response.raise_for_status()
-            data = response.json()
-            if "rates" not in data or currency_to not in data["rates"]:
-                return f"Could not retrieve rate for {currency_from} to {currency_to}"
-            rate = data["rates"][currency_to]
-            return f"1 {currency_from} = {rate} {currency_to}"
-        except Exception as e:
-            return f"Currency API call failed: {str(e)}"
-        
-# endregion
-
-# region Response Format
-
 class ResponseFormat(BaseModel):
     """A Response Format model to direct how the model should respond."""
     status: Literal["input_required", "completed", "error"] = "input_required"
@@ -66,7 +34,7 @@ class ResponseFormat(BaseModel):
 
 # region Semantic Kernel Agent
 
-class SemanticKernelTravelAgent:
+class HRAgent:
     """Wraps Semantic Kernel-based agents to handle Travel related tasks."""
 
     agent: ChatCompletionAgent
@@ -75,39 +43,32 @@ class SemanticKernelTravelAgent:
 
     def __init__(self):
 
-
-
-        # Define a CurrencyExchangeAgent to handle currency-related tasks
-        currency_exchange_agent = ChatCompletionAgent(
-            service=AzureChatCompletion(
-                api_key=os.getenv("AZURE_OPENAI_TOKEN"),
-                endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                deployment_name='gpt-4o',
-            ),
-            name="CurrencyExchangeAgent",
-            instructions=(
-                "You specialize in handling currency-related requests from travelers. "
-                "This includes providing current exchange rates, converting amounts between different currencies, "
-                "explaining fees or charges related to currency exchange, and giving advice on the best practices for exchanging currency. "
-                "Your goal is to assist travelers promptly and accurately with all currency-related questions."
-            ),
-            plugins=[CurrencyPlugin()],
-        )
+        # currency_exchange_agent = ChatCompletionAgent(
+        #     service=AzureChatCompletion(
+        #         api_key=os.getenv("AZURE_OPENAI_TOKEN"),
+        #         endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        #         deployment_name='gpt-4o',
+        #     ),
+        #     name="CurrencyExchangeAgent",
+        #     instructions=(
+        #         "You specialize in handling currency-related requests from travelers. "
+        #         "This includes providing current exchange rates, converting amounts between different currencies, "
+        #         "explaining fees or charges related to currency exchange, and giving advice on the best practices for exchanging currency. "
+        #         "Your goal is to assist travelers promptly and accurately with all currency-related questions."
+        #     ),
+        #     plugins=[CurrencyPlugin()],
+        # )
 
         # Define an ActivityPlannerAgent to handle activity-related tasks
-        activity_planner_agent = ChatCompletionAgent(
+        rating_agent = ChatCompletionAgent(
             service=AzureChatCompletion(
                 api_key=os.getenv("AZURE_OPENAI_TOKEN"),
                 endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 deployment_name='gpt-4o',
             ),
-            name="ActivityPlannerAgent",
+            name="RatingAgent",
             instructions=(
-                "You specialize in planning and recommending activities for travelers. "
-                "This includes suggesting sightseeing options, local events, dining recommendations, "
-                "booking tickets for attractions, advising on travel itineraries, and ensuring activities "
-                "align with traveler preferences and schedule. "
-                "Your goal is to create enjoyable and personalized experiences for travelers."
+                "Rate a candidate for AI Scientist of SAP. Focus on the expertise and diversity background."
             ),
         )
 
@@ -118,19 +79,11 @@ class SemanticKernelTravelAgent:
                 endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 deployment_name='gpt-4o',
             ),
-            name="TravelManagerAgent",
+            name="HRAgent",
             instructions=(
-                "Your role is to carefully analyze the traveler's request and forward it to the appropriate agent based on the "
-                "specific details of the query. "
-                "Forward any requests involving monetary amounts, currency exchange rates, currency conversions, fees related "
-                "to currency exchange, financial transactions, or payment methods to the CurrencyExchangeAgent. "
-                "Forward requests related to planning activities, sightseeing recommendations, dining suggestions, event "
-                "booking, itinerary creation, or any experiential aspects of travel that do not explicitly involve monetary "
-                "transactions to the ActivityPlannerAgent. "
-                "Your primary goal is precise and efficient delegation to ensure travelers receive accurate and specialized "
-                "assistance promptly."
+                "Your role is to carefully analyze the candidate's resume and you    specialize in rating candidates and recommending the best one for recruiter."
             ),
-            plugins=[currency_exchange_agent, activity_planner_agent],
+            plugins=[rating_agent],
             arguments=KernelArguments(
                 settings=AzureChatPromptExecutionSettings(
                     response_format=ResponseFormat,
@@ -191,7 +144,7 @@ class SemanticKernelTravelAgent:
                     yield {
                         "is_task_complete": False,
                         "require_user_input": False,
-                        "content": "Building the trip plan...",
+                        "content": "Rating the candidate",
                     }
                     message_in_progress = True
 
@@ -238,8 +191,9 @@ class SemanticKernelTravelAgent:
         """
         # Replace check with self.thread.id when 
         # https://github.com/microsoft/semantic-kernel/issues/11535 is fixed
-        if self.thread is None or self.thread._thread_id != session_id:
-            await self.thread.delete() if self.thread else None
-            self.thread = ChatHistoryAgentThread(thread_id=session_id)
-
+        if self.thread is None or getattr(self, "thread_id", None) != session_id:
+            if self.thread:
+                await self.thread.delete()
+            self.thread = ChatHistoryAgentThread()
+            self.thread_id = session_id
 # endregion

@@ -21,13 +21,9 @@ packages = ["common", "hosts"]
 
 [tool.uv.workspace]
 members = [
-    "agents/crewai",
-    "agents/google_adk",
-    "agents/langgraph",
-    "agents/marvin",
     "hosts/cli",
     "hosts/multiagent",
-    "agents/llama_index_file_chat",
+    "agents/hr_agent",
     "agents/semantickernel",
 ]
 

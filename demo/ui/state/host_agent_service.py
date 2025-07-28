@@ -17,7 +17,8 @@ from service.types import (
     ListTaskRequest,
     RegisterAgentRequest,
     ListAgentRequest,
-    GetEventRequest
+    GetEventRequest,
+    SendMessageWithFileRequest
 )
 from .state import (
     AppState,
@@ -40,6 +41,14 @@ async def ListConversations() -> list[Conversation]:
     return response.result
   except Exception as e:
     print("Failed to list conversations: ", e)
+async def SendMessageWithFile(message: Message) -> str | None:
+  client = ConversationClient(server_url)
+  try:
+    response = await client.send_message_with_file(SendMessageWithFileRequest(params=message))
+    return response.result.message_id if response.result else None
+  except Exception as e:
+    print("Failed to send message with file:", e)
+    return None
 
 async def SendMessage(message: Message) -> str | None:
   client = ConversationClient(server_url)
@@ -110,17 +119,65 @@ async def ListMessages(conversation_id: str) -> list[Message]:
   except Exception as e:
     print("Failed to list messages ", e)
 
-
 async def UpdateAppState(state: AppState, conversation_id: str):
   """Update the app state."""
   try:
+    print(f"[DEBUG] UpdateAppState called, conversation_id: {conversation_id}")
+    print(f"[DEBUG] Before update, message count: {len(state.messages)}")
+    
     if conversation_id:
       state.current_conversation_id = conversation_id
+      
+      # 保存本地的未同步消息（比如刚上传的文件或正在处理的消息）
+      local_messages = []
+      if state.messages:
+        for msg in state.messages:
+          should_preserve = False
+          
+          # 保留正在处理中的消息
+          if msg.message_id in state.background_tasks:
+            should_preserve = True
+            print(f"[DEBUG] Preserving background task message: {msg.message_id}")
+          
+          # 保留文件上传消息（通过检查消息内容）
+          if msg.content and len(msg.content) > 0:
+            content_text = msg.content[0][0] if isinstance(msg.content[0][0], str) else ""
+            if "[Uploaded file:" in content_text or "📎" in content_text:
+              should_preserve = True
+              print(f"[DEBUG] Preserving file upload message: {msg.message_id}")
+          
+          # 保留有 file_upload 标记的消息
+          if (hasattr(msg, 'metadata') and 
+              isinstance(msg.metadata, dict) and 
+              msg.metadata.get('file_upload', False)):
+            should_preserve = True
+            print(f"[DEBUG] Preserving marked file upload message: {msg.message_id}")
+          
+          if should_preserve:
+            local_messages.append(msg)
+        
+        print(f"[DEBUG] Found {len(local_messages)} local messages to preserve")
+      
       messages = await ListMessages(conversation_id)
       if not messages:
-        state.messages = []
+        # 如果服务器没有消息，只保留本地未同步的消息
+        state.messages = local_messages
+        print(f"[DEBUG] No server messages, keeping {len(local_messages)} local messages")
       else:
-        state.messages = [convert_message_to_state(x) for x in messages]
+        # 合并服务器消息和本地未同步消息
+        server_messages = [convert_message_to_state(x) for x in messages]
+        server_message_ids = {msg.message_id for msg in server_messages}
+        
+        # 只保留服务器还没有的本地消息
+        unique_local_messages = [
+          msg for msg in local_messages 
+          if msg.message_id not in server_message_ids
+        ]
+        
+        # 合并：服务器消息 + 本地独有消息
+        state.messages = server_messages + unique_local_messages
+        print(f"[DEBUG] Merged {len(server_messages)} server messages with {len(unique_local_messages)} unique local messages")
+        
     conversations = await ListConversations()
     if not conversations:
       state.conversations = []
@@ -139,6 +196,8 @@ async def UpdateAppState(state: AppState, conversation_id: str):
       )
     state.background_tasks = await GetProcessingMessages()
     state.message_aliases = GetMessageAliases()
+    
+    print(f"[DEBUG] After update, message count: {len(state.messages)}")
   except Exception as e:
     print("Failed to update state: ", e)
     traceback.print_exc(file=sys.stdout)
