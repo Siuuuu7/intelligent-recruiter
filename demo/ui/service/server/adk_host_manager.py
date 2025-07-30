@@ -249,6 +249,10 @@ class ADKHostManager(ApplicationManager):
             'input_message_metadata': message.metadata,
             'session_id': conversation_id,
         }
+        
+        # Debug log file path if present
+        if message.metadata and 'file_path' in message.metadata:
+            print(f"[DEBUG] ADK Host Manager: file_path in metadata: {message.metadata['file_path']}")
 
         target_agent_url = message.metadata.get('remote_agent_url')
         if target_agent_url:

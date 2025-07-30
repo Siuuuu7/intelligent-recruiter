@@ -41,10 +41,21 @@ async def ListConversations() -> list[Conversation]:
     return response.result
   except Exception as e:
     print("Failed to list conversations: ", e)
-async def SendMessageWithFile(message: Message) -> str | None:
+async def SendMessageWithFile(message: Message, file_path: str) -> str | None:
   client = ConversationClient(server_url)
   try:
-    response = await client.send_message_with_file(SendMessageWithFileRequest(params=message))
+    print(f"[DEBUG] SendMessageWithFile: Input message metadata: {message.metadata}")
+    print(f"[DEBUG] SendMessageWithFile: file_path: {file_path}")
+    
+    # Create a copy of the message with file path metadata
+    message_with_file = message.model_copy(deep=True)
+    if not message_with_file.metadata:
+        message_with_file.metadata = {}
+    message_with_file.metadata['file_path'] = file_path
+    
+    print(f"[DEBUG] SendMessageWithFile: Final message metadata: {message_with_file.metadata}")
+    
+    response = await client.send_message_with_file(SendMessageWithFileRequest(params=message_with_file), file_path)
     return response.result.message_id if response.result else None
   except Exception as e:
     print("Failed to send message with file:", e)
@@ -319,9 +330,18 @@ def extract_conversation_id(task: Task) -> str:
   return ""
 
 async def pick_agent_using_chatgpt(user_message: str) -> str | None:
-    api_key = os.environ.get("OPENAI_API_KEY")
+    # Azure OpenAI configuration
+    api_key = os.environ.get("AZURE_OPENAI_TOKEN")
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+    deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+    api_version = "2025-03-01-preview"
+    
     if not api_key:
-        print("[DEBUG] No OPENAI_API_KEY found.")
+        print("[DEBUG] No AZURE_OPENAI_TOKEN found.")
+        return None
+    
+    if not endpoint:
+        print("[DEBUG] No AZURE_OPENAI_ENDPOINT found.")
         return None
 
     remote_agents = await ListRemoteAgents()
@@ -347,12 +367,11 @@ ONLY reply with the agent's base_url. Nothing else.
 """
 
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "api-key": api_key,
         "Content-Type": "application/json",
     }
 
     body = {
-        "model": "gpt-4o",  # <-- Use "gpt-4o" here for the latest
         "messages": [
             {"role": "system", "content": "You are an agent router."},
             {"role": "user", "content": prompt}
@@ -360,10 +379,13 @@ ONLY reply with the agent's base_url. Nothing else.
         "temperature": 0.0
     }
 
+    # Construct Azure OpenAI URL
+    azure_url = f"{endpoint.rstrip('/')}/openai/deployments/{deployment_name}/chat/completions?api-version={api_version}"
+
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",  # <== ✅ Correct URL
+                azure_url,
                 headers=headers,
                 json=body
             )
@@ -372,8 +394,8 @@ ONLY reply with the agent's base_url. Nothing else.
             text_response = data["choices"][0]["message"]["content"]
             text_response = text_response.strip()
 
-            print(f"[DEBUG] ChatGPT suggested agent: {text_response}")
+            print(f"[DEBUG] Azure OpenAI suggested agent: {text_response}")
             return text_response
     except Exception as e:
-        print("[DEBUG] Failed to call ChatGPT:", e)
+        print(f"[DEBUG] Failed to call Azure OpenAI: {e}")
         return None

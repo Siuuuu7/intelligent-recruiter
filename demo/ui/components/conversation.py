@@ -6,6 +6,8 @@ import uuid
 import functools
 import threading
 import httpx  # << NEW: import for sending HTTP requests
+import tempfile
+import os
 
 from state.host_agent_service import SendMessageWithFile, pick_agent_using_chatgpt
 from state.state import AppState, SettingsState, StateMessage
@@ -110,7 +112,36 @@ async def send_message(message: str, message_id: str = ""):
         print(f"[DEBUG] Using existing remote_agent_url: {remote_agent_url}")
         request_metadata['remote_agent_url'] = remote_agent_url
 
-    # --- 5. Create the Message Payload for the Backend ---
+    # --- 5. Check for uploaded files and add to metadata ---
+    file_path = None
+    print(f"[DEBUG] send_message: app_state object id: {id(app_state)}")
+    print(f"[DEBUG] Checking for uploaded files. hasattr(app_state, 'conversation_files'): {hasattr(app_state, 'conversation_files')}")
+    if hasattr(app_state, 'conversation_files'):
+        print(f"[DEBUG] app_state.conversation_files: {app_state.conversation_files}")
+        print(f"[DEBUG] conv_id_to_use: {conv_id_to_use}")
+        print(f"[DEBUG] conv_id_to_use in conversation_files: {conv_id_to_use in app_state.conversation_files}")
+        
+    # First try app_state method
+    if hasattr(app_state, 'conversation_files') and conv_id_to_use in app_state.conversation_files:
+        file_path = app_state.conversation_files[conv_id_to_use]
+        print(f"[DEBUG] Found uploaded file for conversation {conv_id_to_use}: {file_path}")
+    else:
+        print(f"[DEBUG] No uploaded file found in app_state for conversation {conv_id_to_use}")
+        # Fallback: check global uploaded_files dict
+        print(f"[DEBUG] Checking global uploaded_files dict: {uploaded_files}")
+        for key, path in uploaded_files.items():
+            if conv_id_to_use in key:
+                file_path = path
+                print(f"[DEBUG] Found file in global dict with key {key}: {file_path}")
+                break
+    
+    if file_path and os.path.exists(file_path):
+        request_metadata['file_path'] = file_path
+        print(f"[DEBUG] Added file_path to metadata: {file_path}")
+    else:
+        print(f"[DEBUG] File path exists check failed. file_path: {file_path}, exists: {os.path.exists(file_path) if file_path else 'N/A'}")
+
+    # --- 6. Create the Message Payload for the Backend ---
     backend_request = Message(
         # Let backend assign the canonical ID via sanitize_message
         role="user",
@@ -118,18 +149,21 @@ async def send_message(message: str, message_id: str = ""):
         metadata=request_metadata,
     )
 
-    # --- 6. Send the Request to the Backend ---
-    print(f"Sending message content to backend via SendMessage for conversation {conv_id_to_use}.")
+    # --- 7. Send the Request to the Backend ---
+    print(f"[DEBUG] Final check before sending to backend:")
+    print(f"[DEBUG] file_path: {file_path}")
+    print(f"[DEBUG] file_path exists: {os.path.exists(file_path) if file_path else 'N/A'}")
+    print(f"[DEBUG] backend_request.metadata: {backend_request.metadata}")
+    
     try:
-        if message_id in uploaded_files:
-            file_path = uploaded_files.pop(message_id)
+        if file_path and os.path.exists(file_path):
+            print(f"Sending message content to backend via SendMessageWithFile for conversation {conv_id_to_use}.")
             await SendMessageWithFile(backend_request, file_path)
             print(f"SendMessageWithFile call completed for conversation {conv_id_to_use}.")
         else:
+            print(f"Sending message content to backend via SendMessage for conversation {conv_id_to_use}.")
             await SendMessage(backend_request)
             print(f"SendMessage call completed for conversation {conv_id_to_use}.")
-        # await SendMessage(backend_request)
-        # print(f"SendMessage call completed for conversation {conv_id_to_use}.")
     except Exception as e:
         print(f"[ERROR] Failed to send message via SendMessage: {e}")
         # Optionally, update UI to show an error state?
@@ -175,22 +209,34 @@ def handle_upload(e: me.UploadEvent):
     print(f"[UPLOAD] Received file: {e.file.name}")
     page_state = me.state(PageState)
     app_state = me.state(AppState)
-    message_id = str(uuid.uuid4())  # 可选：如果你希望上传后立即生成一个 message ID
-
-    # 保存文件到本地临时目录
-    file_path = f"/resume/{message_id}_{e.file.name}"
+    print(f"[UPLOAD] page_state.conversation_id: {page_state.conversation_id}")
+    print(f"[UPLOAD] app_state object id: {id(app_state)}")
+    
+    # Use conversation_id + filename as a more stable key
+    file_key = f"{page_state.conversation_id}_{e.file.name}"
+    
+    temp_dir = tempfile.mkdtemp()
+    file_path = os.path.join(temp_dir, f"{file_key}_{e.file.name}")
     try:
         with open(file_path, "wb") as f:
             f.write(e.file.getvalue())  # Use getvalue() method for file content
         
-        uploaded_files[message_id] = file_path  # 保存路径，稍后 send_message 会用到
-
-        # 可以在 UI 上显示一下文件已上传
+        # Store with conversation-based key for lookup later
+        uploaded_files[file_key] = file_path 
+        
+        # Also store with a special marker to indicate a file was uploaded for this conversation
+        if not hasattr(app_state, 'conversation_files'):
+            app_state.conversation_files = {}
+        app_state.conversation_files[page_state.conversation_id] = file_path
+        print(f"[DEBUG] Set app_state.conversation_files[{page_state.conversation_id}] = {file_path}")
+        print(f"[DEBUG] app_state.conversation_files after upload: {app_state.conversation_files}")
+        
+        message_id = str(uuid.uuid4())
         app_state.messages.append(StateMessage(
             message_id=message_id,
             role="user",
             content=[(f"[Uploaded file: {e.file.name}]", "text/plain")],
-            metadata={"conversation_id": page_state.conversation_id}
+            metadata={"conversation_id": page_state.conversation_id, "file_upload": True}
         ))
         print(f"[UPLOAD] File saved successfully: {file_path}")
     except Exception as ex:
