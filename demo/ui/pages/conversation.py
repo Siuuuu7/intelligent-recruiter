@@ -18,6 +18,6 @@ def handle_file_upload(e: me.UploadEvent):
     state = me.state(AppState)
     state.uploaded_file = {
         "name": e.file.name,
-        "content": e.file.read(),
+        "content": e.file.getvalue(),
         "mime_type": e.file.mimeType
     }

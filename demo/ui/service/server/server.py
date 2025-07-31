@@ -106,8 +106,76 @@ class ConversationServer:
     c = self.manager.create_conversation()
     return CreateConversationResponse(result=c).model_dump()
   async def _send_message_with_file(self, request: Request):
-    message_data = await request.json()
-    message = Message(**message_data['params'])
+    print(f"[DEBUG] Server: _send_message_with_file called")
+    
+    # Check content type to determine how to parse the request
+    content_type = request.headers.get("content-type", "")
+    print(f"[DEBUG] Server: Request content-type: {content_type}")
+    
+    message = None
+    
+    try:
+      if "multipart/form-data" in content_type:
+        # Handle multipart form data (actual file upload)
+        print(f"[DEBUG] Server: Parsing multipart form data")
+        form = await request.form()
+        
+        if 'message' in form:
+          import json
+          message_data = json.loads(form['message'])
+          print(f"[DEBUG] Server: message_data from form: {message_data}")
+          message = Message(**message_data['params'])
+          
+          # Handle uploaded file if present
+          if 'file' in form:
+            uploaded_file = form['file']
+            print(f"[DEBUG] Server: Received file: {uploaded_file.filename}")
+            
+            # Extract text from uploaded file and include it in the message
+            file_text = self._extract_text_from_uploaded_file(uploaded_file)
+            if file_text:
+              # Append extracted text to the message content
+              original_text = message.parts[0].text if message.parts else ""
+              enhanced_text = f"""{original_text}
+
+--- UPLOADED FILE CONTENT ({uploaded_file.filename}) ---
+{file_text}
+--- END OF FILE CONTENT ---
+
+Please analyze the above resume content and provide a detailed rating."""
+              
+              # Update the message with enhanced text
+              from common.types import TextPart
+              message.parts = [TextPart(text=enhanced_text)]
+              print(f"[DEBUG] Server: Enhanced message with {len(file_text)} characters of extracted text")
+        else:
+          print(f"[DEBUG] Server: No 'message' field in form data")
+          return {"error": "No message field in form data"}
+          
+      else:
+        # Handle JSON format (regular message with file metadata)
+        print(f"[DEBUG] Server: Parsing JSON data")
+        try:
+          message_data = await request.json()
+          print(f"[DEBUG] Server: message_data from JSON: {message_data}")
+          message = Message(**message_data['params'])
+        except UnicodeDecodeError as unicode_error:
+          print(f"[DEBUG] Server: Unicode decode error - request may contain binary data: {unicode_error}")
+          return {"error": "Invalid request format - contains binary data"}
+        except json.JSONDecodeError as json_error:
+          print(f"[DEBUG] Server: JSON decode error: {json_error}")
+          return {"error": "Invalid JSON format"}
+          
+    except Exception as e:
+      print(f"[DEBUG] Server: Exception in request parsing: {e}")
+      return {"error": f"Failed to parse request: {str(e)}"}
+    
+    if not message:
+      print(f"[DEBUG] Server: Failed to create message object")
+      return {"error": "Failed to create message object"}
+    
+    print(f"[DEBUG] Server: Final message object: {message}")
+    print(f"[DEBUG] Server: Message metadata: {message.metadata}")
     message = self.manager.sanitize_message(message)
 
     # 储存 message 到会话里
@@ -227,3 +295,95 @@ class ConversationServer:
         return {"status": "error", "message": "No API key provided"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+  def _extract_text_from_uploaded_file(self, uploaded_file):
+    """Extract text content from uploaded files.
+    
+    Args:
+        uploaded_file: FastAPI UploadFile object
+        
+    Returns:
+        str: Extracted text content or None if extraction fails
+    """
+    try:
+      filename = uploaded_file.filename
+      file_content = uploaded_file.file.read()
+      
+      # Reset file pointer for potential future reads
+      uploaded_file.file.seek(0)
+      
+      # Determine file type from filename
+      if filename.lower().endswith('.pdf'):
+        return self._extract_pdf_text(file_content)
+      elif filename.lower().endswith(('.txt', '.text')):
+        return file_content.decode('utf-8')
+      elif filename.lower().endswith(('.doc', '.docx')):
+        return self._extract_word_text(file_content)
+      else:
+        print(f"[DEBUG] Server: Unsupported file type: {filename}")
+        return None
+        
+    except Exception as e:
+      print(f"[ERROR] Server: Failed to extract text from file: {e}")
+      return None
+  
+  def _extract_pdf_text(self, file_content):
+    """Extract text from PDF file content.
+    
+    Args:
+        file_content (bytes): PDF file content
+        
+    Returns:
+        str: Extracted text or None if extraction fails
+    """
+    try:
+      # Try using PyPDF2 first
+      try:
+        import PyPDF2
+        import io
+        
+        pdf_file = io.BytesIO(file_content)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        text_content = ""
+        
+        for page in pdf_reader.pages:
+          text_content += page.extract_text() + "\n"
+          
+        return text_content.strip()
+        
+      except ImportError:
+        print("[DEBUG] Server: PyPDF2 not available for PDF extraction")
+        return "PDF text extraction requires PyPDF2 library. Please install it with: pip install PyPDF2"
+        
+    except Exception as e:
+      print(f"[ERROR] Server: Failed to extract PDF text: {e}")
+      return None
+  
+  def _extract_word_text(self, file_content):
+    """Extract text from Word document file content.
+    
+    Args:
+        file_content (bytes): Word document file content
+        
+    Returns:
+        str: Extracted text or None if extraction fails
+    """
+    try:
+      import docx
+      import io
+      
+      doc_file = io.BytesIO(file_content)
+      doc = docx.Document(doc_file)
+      text_content = ""
+      
+      for paragraph in doc.paragraphs:
+        text_content += paragraph.text + "\n"
+        
+      return text_content.strip()
+      
+    except ImportError:
+      print("[DEBUG] Server: python-docx not available for Word document extraction")
+      return "Word document text extraction requires python-docx library. Please install it with: pip install python-docx"
+    except Exception as e:
+      print(f"[ERROR] Server: Failed to extract Word document text: {e}")
+      return None

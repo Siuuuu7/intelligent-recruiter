@@ -52,8 +52,17 @@ class TaskManager(InMemoryTaskManager):
         await self.send_task_notification(task)
 
         query = request.params.message.parts[0].text
+        
         try:
             agent_response = await self.agent.invoke(query, request.params.sessionId)
+            # Print HR agent response to terminal
+            print(f"\n{'='*60}")
+            print(f"HR AGENT RESPONSE:")
+            print(f"{'='*60}")
+            print(f"Content: {agent_response.get('content', 'No content')}")
+            print(f"Require User Input: {agent_response.get('require_user_input', False)}")
+            print(f"Task Complete: {agent_response.get('is_task_complete', False)}")
+            print(f"{'='*60}\n")
         except Exception as e:
             logger.error(f"Semantic Kernel Task Manager error: {e}")
             raise ValueError(f"Agent error: {e}")
@@ -98,11 +107,21 @@ class TaskManager(InMemoryTaskManager):
         """
         try:
             query = request.params.message.parts[0].text
+            
             async for partial in self.agent.stream(query, request.params.sessionId):
                 require_input = partial["require_user_input"]
                 is_done = partial["is_task_complete"]
                 text_content = partial["content"]
                 artifact = None
+                
+                # Print HR agent streaming response to terminal
+                print(f"\n{'='*40}")
+                print(f"HR AGENT STREAMING RESPONSE:")
+                print(f"{'='*40}")
+                print(f"Content: {text_content}")
+                print(f"Require User Input: {require_input}")
+                print(f"Task Complete: {is_done}")
+                print(f"{'='*40}\n")
 
                 new_status = TaskStatus(state=TaskState.WORKING)
                 # By default, don't end the stream

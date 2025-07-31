@@ -98,6 +98,13 @@ class HostAgent:
 
   def root_instruction(self, context: ReadonlyContext) -> str:
     current_agent = self.check_state(context)
+    state = context.state
+    
+    # Include file context if available
+    file_context = ""
+    if 'file_context' in state:
+      file_context = f"\n\nFile Context: {state['file_context']}"
+    
     return f"""You are an expert delegator that can delegate the user request to the
 appropriate remote agents.
 
@@ -108,6 +115,13 @@ can use to delegate the task.
 Execution:
 - For actionable tasks, you can use `create_task` to assign tasks to remote agents to perform.
 Be sure to include the remote agent name when you respond to the user.
+
+File Handling:
+- When users upload files (PDFs, documents, etc.), your job is to identify the appropriate 
+specialist agent and forward the file along with the user's request.
+- For resume analysis, CV review, or HR-related document analysis, delegate to the HR agent.
+- Always ensure that uploaded files are properly forwarded to the selected agent for processing.
+- If a file has been uploaded, mention this in your delegation to help the receiving agent understand the context.
 
 You can use `check_pending_task_states` to check the states of the pending
 tasks.
@@ -120,7 +134,7 @@ If there is an active agent, send the request to that agent with the update task
 Agents:
 {self.agents}
 
-Current agent: {current_agent['active_agent']}
+Current agent: {current_agent['active_agent']}{file_context}
 """
 
   def check_state(self, context: ReadonlyContext):
@@ -138,6 +152,16 @@ Current agent: {current_agent['active_agent']}
       if 'session_id' not in state:
         state['session_id'] = str(uuid.uuid4())
       state['session_active'] = True
+    
+    # Add context about uploaded files if present
+    if 'input_message_metadata' in state and state['input_message_metadata']:
+      metadata = state['input_message_metadata']
+      if 'file_path' in metadata:
+        # Inject file context into the conversation
+        file_path = metadata['file_path']
+        filename = file_path.split('/')[-1] if '/' in file_path else file_path
+        state['file_context'] = f"Note: User has uploaded a file '{filename}' that needs to be processed."
+        print(f"[DEBUG] Host Agent: Added file context to state: {filename}")
 
   def list_remote_agents(self):
     """List the available remote agents you can use to delegate the task."""
@@ -185,12 +209,30 @@ Current agent: {current_agent['active_agent']}
     messageId = ""
     metadata = {}
     if 'input_message_metadata' in state:
+      print(f"[DEBUG] Multiagent Host: input_message_metadata keys: {list(state['input_message_metadata'].keys())}")
+      print(f"[DEBUG] Multiagent Host: input_message_metadata content: {state['input_message_metadata']}")
       metadata.update(**state['input_message_metadata'])
       if 'message_id' in state['input_message_metadata']:
         messageId = state['input_message_metadata']['message_id']
     if not messageId:
       messageId = str(uuid.uuid4())
     metadata.update(**{'conversation_id': sessionId, 'message_id': messageId})
+    
+    # Forward file path information if available
+    if 'input_message_metadata' in state and 'file_path' in state['input_message_metadata']:
+      metadata['file_path'] = state['input_message_metadata']['file_path']
+      print(f"[DEBUG] Multiagent Host: Forwarding file_path to {agent_name}: {metadata['file_path']}")
+    else:
+      print(f"[DEBUG] Multiagent Host: No file_path found in input_message_metadata for {agent_name}")
+    
+    print(f"[DEBUG] Multiagent Host: Final metadata being sent to {agent_name}: {metadata}")
+    
+    # Create TaskSendParams metadata that includes file_path if available
+    task_metadata = {'conversation_id': sessionId}
+    if 'file_path' in metadata:
+        task_metadata['file_path'] = metadata['file_path']
+        print(f"[DEBUG] Multiagent Host: Added file_path to TaskSendParams metadata: {metadata['file_path']}")
+    
     request: TaskSendParams = TaskSendParams(
         id=taskId,
         sessionId=sessionId,
@@ -199,9 +241,9 @@ Current agent: {current_agent['active_agent']}
             parts=[TextPart(text=message)],
             metadata=metadata,
         ),
-        acceptedOutputModes=["text", "text/plain", "image/png"],
+        acceptedOutputModes=["text", "text/plain", "image/png", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
         # pushNotification=None,
-        metadata={'conversation_id': sessionId},
+        metadata=task_metadata,
     )
     task = await client.send_task(request, self.task_callback)
     # Assume completion unless a state returns that isn't complete
