@@ -20,18 +20,18 @@ from common.types import (
 )
 from common.utils.push_notification_auth import PushNotificationSenderAuth
 
-from agents.hr_agent.agent import HRAgent
+from agents.background_check_agent.agent import BackgroundCheckAgent
 
 logger = logging.getLogger(__name__)
 
 
 class TaskManager(InMemoryTaskManager):
-    """A TaskManager used for the Semantic Kernel Agent sample."""
+    """A TaskManager used for the Background Check Agent."""
 
     def __init__(self, notification_sender_auth: PushNotificationSenderAuth):
         """Initialize the TaskManager with a notification sender."""
         super().__init__()
-        self.agent = HRAgent()
+        self.agent = BackgroundCheckAgent()
         self.notification_sender_auth = notification_sender_auth
 
     async def on_send_task(self, request: SendTaskRequest) -> SendTaskResponse:
@@ -55,16 +55,16 @@ class TaskManager(InMemoryTaskManager):
         
         try:
             agent_response = await self.agent.invoke(query, request.params.sessionId)
-            # Print HR agent response to terminal
+            # Print background check agent response to terminal
             print(f"\n{'='*60}")
-            print(f"HR AGENT RESPONSE:")
+            print(f"BACKGROUND CHECK AGENT RESPONSE:")
             print(f"{'='*60}")
             print(f"Content: {agent_response.get('content', 'No content')}")
             print(f"Require User Input: {agent_response.get('require_user_input', False)}")
             print(f"Task Complete: {agent_response.get('is_task_complete', False)}")
             print(f"{'='*60}\n")
         except Exception as e:
-            logger.error(f"Semantic Kernel Task Manager error: {e}")
+            logger.error(f"Background Check Task Manager error: {e}")
             raise ValueError(f"Agent error: {e}")
 
         return await self._process_agent_response(request, agent_response)
@@ -114,9 +114,9 @@ class TaskManager(InMemoryTaskManager):
                 text_content = partial["content"]
                 artifact = None
                 
-                # Print HR agent streaming response to terminal
+                # Print Check agent streaming response to terminal
                 print(f"\n{'='*40}")
-                print(f"HR AGENT STREAMING RESPONSE:")
+                print(f"Background Check AGENT STREAMING RESPONSE:")
                 print(f"{'='*40}")
                 print(f"Content: {text_content}")
                 print(f"Require User Input: {require_input}")
@@ -206,9 +206,9 @@ class TaskManager(InMemoryTaskManager):
         if not request.params.acceptedOutputModes:
             return None
         if not any(
-            mode in HRAgent.SUPPORTED_CONTENT_TYPES for mode in request.params.acceptedOutputModes
+            mode in BackgroundCheckAgent.SUPPORTED_CONTENT_TYPES for mode in request.params.acceptedOutputModes
         ):
-            logger.warning("Incompatible content type for SK Agent.")
+            logger.warning("Incompatible content type for Background Check Agent.")
             return JSONRPCResponse(id=request.id, error=InvalidParamsError(message="Bad content type."))
         return None
 

@@ -1,7 +1,8 @@
-"""AutoGen Currency Agent
+"""AutoGen Candidate Evaluation Agent
 
-This package provides a currency conversion agent built with AutoGen.
-It enables querying exchange rates between different currencies.
+This package provides a multi-agent candidate evaluation system built with AutoGen.
+It enables comprehensive assessment of candidates for AI Scientist positions using
+specialized Tech Rater, Inclusion Rater, and Reporter agents.
 """
 
 from agents.autogen.agent import AutogenAgent

@@ -3,11 +3,9 @@ import os
 from collections.abc import AsyncIterable
 from typing import Any, Literal
 
-import httpx
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.ui import Console
 from autogen_agentchat.teams import Swarm
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
@@ -58,7 +56,7 @@ class ResponseFormat(BaseModel):
 
 
 class AutogenAgent:
-    """A currency conversion agent using AutoGen."""
+    """A multi-agent candidate evaluation system using AutoGen."""
 
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
 
@@ -66,7 +64,6 @@ class AutogenAgent:
         self.client = self._get_client()
         self.agents = self._create_agents()
         self.team = self._create_team()
-        self.tools = [self.get_exchange_rate]
         self.session_data: dict[str, Any] = {}
 
     def _get_client(self):
@@ -80,9 +77,9 @@ class AutogenAgent:
 
     def _create_agents(self):
         tech_rater = AssistantAgent(
-            'Tech Rater',
+            'TechRater',
             model_client=self.client,
-            handoffs=['Tech Rater'],
+            handoffs=['InclusionRater'],
             description='Rate the technical expertise of the candidate.',
             system_message=f'''You are a technical recruiter for the following job position:{JD_TECH}; 
             Your task is to evaluate the technical expertise of candidates based on the resume as well as the interview talks and provide a rating from 1 to 10 as well as the reasons.
@@ -90,9 +87,9 @@ class AutogenAgent:
             ''',
         )
         inclusion_rater = AssistantAgent(
-            'Inclusion Rater',
+            'InclusionRater',
             model_client=self.client,
-            handoffs=['Inclusion Rater'],
+            handoffs=['Reporter'],
             description='Rate the inclusion and diversity background of the candidate.',
             system_message=f'''You are a diversity and inclusion recruiter for the following job position:{JD_INCLUSION}; 
             Your task is to evaluate the inclusion and diversity background of candidates based on the resume as well as the interview talks and provide a rating from 1 to 10 as well as the reasons.
@@ -102,7 +99,6 @@ class AutogenAgent:
         reporter =  AssistantAgent(
             'Reporter',
             model_client=self.client,
-            handoffs=['Reporter'],
             description = 'Report the final rating of the candidate.',
             system_message='''You are a reporter for the following job position: SAP AI Scientist;
             Your task is to summarize the ratings from the Tech Rater and Inclusion Rater, and provide a final report on the candidate.
@@ -115,7 +111,7 @@ class AutogenAgent:
         ]
     def _create_team(self):
         team = Swarm(
-            name='HRAgentTeam',
+            name='CandidateEvaluationTeam',
             participants=self.agents,
             termination_condition=TextMentionTermination("TERMINATE")
 ,
@@ -153,25 +149,45 @@ class AutogenAgent:
     async def invoke(self, query: str, sessionId: str) -> dict[str, Any]:
         if sessionId not in self.session_data:
             self.session_data[sessionId] = []
-        # for assistant in self.agents:
-        #     assistant.reset()
-        self.team.reset()
+        
+        # Reset team for new conversation
+        await self.team.reset()
+        
+        # Run the team with the query
         result = await self.team.run(query)
-        response = result.messages[-1].content if hasattr(result, 'messages') else "I couldn't process your request."
+        
+        # Extract response from the result
+        response = result.messages[-1].content if hasattr(result, 'messages') and result.messages else "I couldn't process your request."
+        
+        # Store session data
         self.session_data[sessionId].append({'role': 'user', 'content': query})
         self.session_data[sessionId].append({'role': 'assistant', 'content': response})
+        
         return self._format_response(response)
 
     async def stream(self, query: str, sessionId: str) -> AsyncIterable[dict[str, Any]]:
         if sessionId not in self.session_data:
             self.session_data[sessionId] = []
+        
         self.session_data[sessionId].append({'role': 'user', 'content': query})
-        # self.assistant.reset()
-        self.team.reset()
-        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Looking up the exchange rates...'}
-        self.team.initiate_chat(self.assistant, message=query, clear_history=False)
-        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Processing the exchange rates..'}
-        chat_history = self.assistant.chat_messages[self.team.name]
-        response = chat_history[-1]['content'] if chat_history else "I couldn't process your request."
+        
+        # Reset team for new conversation
+        await self.team.reset()
+        
+        # Yield initial progress messages
+        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Starting candidate evaluation with multi-agent team...'}
+        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Tech Rater analyzing technical expertise...'}
+        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Inclusion Rater evaluating diversity background...'}
+        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Reporter generating final assessment...'}
+        
+        # Run the team with the query
+        result = await self.team.run(query)
+        
+        # Extract response from the result
+        response = result.messages[-1].content if hasattr(result, 'messages') and result.messages else "I couldn't process your request."
+        
+        # Store session data
         self.session_data[sessionId].append({'role': 'assistant', 'content': response})
+        
+        # Yield final result
         yield self._format_response(response)

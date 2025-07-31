@@ -1,9 +1,11 @@
 import asyncio
+import base64
 import datetime
 import json
 import os
-from typing import Tuple, Optional, Any
+import traceback
 import uuid
+from typing import Tuple, Optional
 from service.types import Conversation, Event
 from common.types import (
     Message,
@@ -30,12 +32,10 @@ from google.adk import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.artifacts import InMemoryArtifactService
-# Ensure GenAIEvent is imported or use the correct type hint
 from google.adk.events.event import Event as ADKEvent
 from google.adk.events.event_actions import EventActions as ADKEventActions
 from google.genai import types
-import base64
-import traceback # Import traceback for error printing
+from google.genai.types import GenerateContentResponse as GenAIEvent
 
 class ADKHostManager(ApplicationManager):
     """An implementation of memory based management with agent actions.
@@ -44,63 +44,65 @@ class ADKHostManager(ApplicationManager):
     the AgentServer. This acts as the service contract that the Mesop app
     uses to send messages to the agent and provide information for the frontend.
     """
-    _conversations: list[Conversation]
-    _messages: list[Message] # Note: Use conversation.messages as primary store
-    _tasks: list[Task]
-    _events: dict[str, Event]
-    _pending_message_ids: list[str] # Tracks user messages awaiting agent response
-    _agents: list[AgentCard]
-    _task_map: dict[str, str] # Maps message_id to task_id
 
     def __init__(self, api_key: str = "", uses_vertex_ai: bool = False):
-        self._conversations = []
-        self._messages = [] # Consider if this global list is truly needed
-        self._tasks = []
-        self._events = {} # Stores Events for UI history/debugging
-        self._pending_message_ids = []
-        self._agents = []
-        self._artifact_chunks = {}
+        # Initialize data structures with proper typing
+        self._conversations: list[Conversation] = []
+        self._messages: list[Message] = []  # Used for global message storage
+        self._tasks: list[Task] = []
+        self._events: dict[str, Event] = {}  # Stores Events for UI history/debugging
+        self._pending_message_ids: list[str] = []  # Tracks user messages awaiting agent response
+        self._agents: list[AgentCard] = []
+        self._artifact_chunks: dict[str, dict[int, Artifact]] = {}
+        self._task_map: dict[str, str] = {}  # Maps message_id to task_id
+        
+        # Initialize ADK services
         self._session_service = InMemorySessionService()
         self._artifact_service = InMemoryArtifactService()
         self._memory_service = InMemoryMemoryService()
-        # Pass the callback to the HostAgent
         self._host_agent = HostAgent([], self.task_callback)
+        self._ready_event = asyncio.Event()
+        
+        # Configuration
         self.user_id = "test_user"
         self.app_name = "A2A"
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY", "")
         self.uses_vertex_ai = uses_vertex_ai or os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE"
-        self._ready_event = asyncio.Event()
 
         # Set environment variables based on auth method
+        self._configure_authentication()
+        
+        # Initialize host asynchronously
+        self._schedule_host_initialization()
+
+    def _configure_authentication(self):
+        """Configure authentication method (Vertex AI or API key)."""
         if self.uses_vertex_ai:
             os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
             # Ensure API key env var is unset if using Vertex AI ADC
             if "GOOGLE_API_KEY" in os.environ:
-                 del os.environ["GOOGLE_API_KEY"]
+                del os.environ["GOOGLE_API_KEY"]
         elif self.api_key:
             # Use API key authentication
             os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
             os.environ["GOOGLE_API_KEY"] = self.api_key
         else:
-             # Handle case where neither is set - ADK might raise error later
-             print("[WARN] Neither Vertex AI nor GOOGLE_API_KEY seems to be configured.")
+            print("[WARN] Neither Vertex AI nor GOOGLE_API_KEY seems to be configured.")
 
+    def _schedule_host_initialization(self):
+        """Schedule host initialization based on event loop availability."""
         try:
             loop = asyncio.get_running_loop()
+            if loop and loop.is_running():
+                asyncio.create_task(self._initialize_host())
+            else:
+                # No running loop yet: defer it manually
+                asyncio.get_event_loop().call_soon_threadsafe(
+                    lambda: asyncio.create_task(self._initialize_host())
+                )
         except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            asyncio.create_task(self._initialize_host())
-        else:
-            # No running loop yet: defer it manually
-            asyncio.get_event_loop().call_soon_threadsafe(
-                lambda: asyncio.create_task(self._initialize_host())
-            )
-        # Map of message id to task id
-        self._task_map = {}
-        # Map to manage 'lost' message ids (less critical now with better state mgmt)
-        # self._next_id = {} # dict[str, str]: previous message to next message
+            # No event loop available, will be initialized later
+            pass
 
     def update_api_key(self, api_key: str):
         """Update the API key and reinitialize the host if needed"""
@@ -241,7 +243,7 @@ class ADKHostManager(ApplicationManager):
             id=str(uuid.uuid4()),
             actor='user',
             content=message,
-            timestamp=datetime.datetime.utcnow().timestamp(),
+            timestamp=datetime.datetime.now(datetime.timezone.utc).timestamp(),
         ))
 
         # State to inject into the session
@@ -597,7 +599,7 @@ class ADKHostManager(ApplicationManager):
                  id=event_id,
                  actor=agent_card.name, # Attribute event to the specific agent
                  content=content,
-                 timestamp=datetime.datetime.utcnow().timestamp(),
+                 timestamp=datetime.datetime.now(datetime.timezone.utc).timestamp(),
              ))
         # else:
         #      print(f"[WARN] emit_event: Could not determine Message content for task_data type {type(task_data)}")
@@ -616,12 +618,9 @@ class ADKHostManager(ApplicationManager):
 
     def insert_id_trace(self, message: Message | None):
         """Records the relationship between consecutive messages (if IDs exist)."""
-        # This seems less critical now but harmless to keep if needed elsewhere
-        # message_id = get_message_id(message)
-        # last_message_id = get_last_message_id(message)
-        # if message_id and last_message_id:
-        #     self._next_id[last_message_id] = message_id
-        pass # Currently disabling this as it seems unused
+        # This functionality is currently disabled as it's unused
+        # Could be re-enabled if message chaining is needed
+        _ = message  # Acknowledge parameter to avoid linter warning
 
 
     def insert_message_history(self, task: Task, message: Message | None):

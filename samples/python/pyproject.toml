@@ -12,6 +12,7 @@ dependencies = [
     "pyjwt>=2.10.1",
     "sse-starlette>=2.2.1",
     "starlette>=0.46.1",
+    "tiktoken>=0.9.0",
     "typing-extensions>=4.12.2",
     "uvicorn>=0.34.0",
 ]
@@ -23,7 +24,7 @@ packages = ["common", "hosts"]
 members = [
     "hosts/cli",
     "hosts/multiagent",
-    "agents/hr_agent",
+    "agents/background_check_agent",
     "agents/semantickernel",
 ]
 

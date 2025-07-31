@@ -1,18 +1,18 @@
 import asyncio
 import base64
-import threading
+import json
+import io
 import os
+import threading
 import uuid
-from typing import Any
-from fastapi import APIRouter
-from fastapi import Request, Response
-from common.types import Message, Task, FilePart, FileContent
+from fastapi import APIRouter, Request, Response
+from common.types import Message, FilePart, FileContent, TextPart
+import PyPDF2
+import docx
 from .in_memory_manager import InMemoryFakeAgentManager
 from .application_manager import ApplicationManager
 from .adk_host_manager import ADKHostManager, get_message_id
 from service.types import (
-    Conversation,
-    Event,
     CreateConversationResponse,
     ListConversationResponse,
     SendMessageResponse,
@@ -34,18 +34,20 @@ class ConversationServer:
   """
   def __init__(self, router: APIRouter):
     agent_manager = os.environ.get("A2A_HOST", "ADK")
-    self.manager: ApplicationManager
     
     # Get API key from environment
     api_key = os.environ.get("GOOGLE_API_KEY", "")
     uses_vertex_ai = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").upper() == "TRUE"
     
+    # Initialize the appropriate manager
     if agent_manager.upper() == "ADK":
-      self.manager = ADKHostManager(api_key=api_key, uses_vertex_ai=uses_vertex_ai)
+      self.manager: ApplicationManager = ADKHostManager(api_key=api_key, uses_vertex_ai=uses_vertex_ai)
     else:
-      self.manager = InMemoryFakeAgentManager()
-    self._file_cache = {} # dict[str, FilePart] maps file id to message data
-    self._message_to_cache = {} # dict[str, str] maps message id to cache id
+      self.manager: ApplicationManager = InMemoryFakeAgentManager()
+      
+    # File caching dictionaries
+    self._file_cache: dict[str, FilePart] = {}  # maps file id to message data
+    self._message_to_cache: dict[str, str] = {}  # maps message id to cache id
 
     router.add_api_route(
         "/conversation/create",
@@ -121,7 +123,6 @@ class ConversationServer:
         form = await request.form()
         
         if 'message' in form:
-          import json
           message_data = json.loads(form['message'])
           print(f"[DEBUG] Server: message_data from form: {message_data}")
           message = Message(**message_data['params'])
@@ -145,7 +146,6 @@ class ConversationServer:
 Please analyze the above resume content and provide a detailed rating."""
               
               # Update the message with enhanced text
-              from common.types import TextPart
               message.parts = [TextPart(text=enhanced_text)]
               print(f"[DEBUG] Server: Enhanced message with {len(file_text)} characters of extracted text")
         else:
@@ -178,14 +178,14 @@ Please analyze the above resume content and provide a detailed rating."""
     print(f"[DEBUG] Server: Message metadata: {message.metadata}")
     message = self.manager.sanitize_message(message)
 
-    # 储存 message 到会话里
+    # Store message to conversation
     conversation_id = message.metadata.get("conversation_id")
     if conversation_id:
       conv = self.manager.get_conversation(conversation_id)
       if conv:
         conv.messages.append(message)
 
-    # 处理可能的文件（你可以在此处理文件缓存逻辑）
+    # Process the message with file content
     t = threading.Thread(target=lambda: asyncio.run(self.manager.process_message(message)))
     t.start()
 
@@ -220,36 +220,41 @@ Please analyze the above resume content and provide a detailed rating."""
           conversation.messages))
     return ListMessageResponse(result=[])
 
-  def cache_content(self, messages: list[Message]):
-    rval = []
-    for m in messages:
-      message_id = get_message_id(m)
+  def cache_content(self, messages: list[Message]) -> list[Message]:
+    """Cache file content and replace with URI references."""
+    cached_messages = []
+    for message in messages:
+      message_id = get_message_id(message)
       if not message_id:
-        rval.append(m)
+        cached_messages.append(message)
         continue
+        
       new_parts = []
-      for i, part in enumerate(m.parts):
+      for i, part in enumerate(message.parts):
         if part.type != 'file':
           new_parts.append(part)
           continue
+          
         message_part_id = f"{message_id}:{i}"
-        if message_part_id in self._message_to_cache:
-          cache_id = self._message_to_cache[message_part_id]
-        else:
+        cache_id = self._message_to_cache.get(message_part_id)
+        if not cache_id:
           cache_id = str(uuid.uuid4())
           self._message_to_cache[message_part_id] = cache_id
-        # Replace the part data with a url reference
+          
+        # Replace the part data with a URI reference
         new_parts.append(FilePart(
             file=FileContent(
                 mimeType=part.file.mimeType,
                 uri=f"/message/file/{cache_id}",
             )
         ))
+        
         if cache_id not in self._file_cache:
           self._file_cache[cache_id] = part
-      m.parts = new_parts
-      rval.append(m)
-    return rval
+          
+      message.parts = new_parts
+      cached_messages.append(message)
+    return cached_messages
 
   async def _pending_messages(self):
     return PendingMessageResponse(result=self.manager.get_pending_messages())
@@ -272,9 +277,9 @@ Please analyze the above resume content and provide a detailed rating."""
   async def _list_agents(self):
     return ListAgentResponse(result=self.manager.agents)
 
-  def _files(self, file_id):
+  def _files(self, file_id: str):
     if file_id not in self._file_cache:
-      raise Exception("file not found")
+      raise FileNotFoundError(f"File {file_id} not found")
     part = self._file_cache[file_id]
     if "image" in part.file.mimeType:
       return Response(
@@ -337,23 +342,14 @@ Please analyze the above resume content and provide a detailed rating."""
         str: Extracted text or None if extraction fails
     """
     try:
-      # Try using PyPDF2 first
-      try:
-        import PyPDF2
-        import io
+      pdf_file = io.BytesIO(file_content)
+      pdf_reader = PyPDF2.PdfReader(pdf_file)
+      text_content = ""
+      
+      for page in pdf_reader.pages:
+        text_content += page.extract_text() + "\n"
         
-        pdf_file = io.BytesIO(file_content)
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        text_content = ""
-        
-        for page in pdf_reader.pages:
-          text_content += page.extract_text() + "\n"
-          
-        return text_content.strip()
-        
-      except ImportError:
-        print("[DEBUG] Server: PyPDF2 not available for PDF extraction")
-        return "PDF text extraction requires PyPDF2 library. Please install it with: pip install PyPDF2"
+      return text_content.strip()
         
     except Exception as e:
       print(f"[ERROR] Server: Failed to extract PDF text: {e}")
@@ -369,9 +365,6 @@ Please analyze the above resume content and provide a detailed rating."""
         str: Extracted text or None if extraction fails
     """
     try:
-      import docx
-      import io
-      
       doc_file = io.BytesIO(file_content)
       doc = docx.Document(doc_file)
       text_content = ""
@@ -381,9 +374,6 @@ Please analyze the above resume content and provide a detailed rating."""
         
       return text_content.strip()
       
-    except ImportError:
-      print("[DEBUG] Server: python-docx not available for Word document extraction")
-      return "Word document text extraction requires python-docx library. Please install it with: pip install python-docx"
     except Exception as e:
       print(f"[ERROR] Server: Failed to extract Word document text: {e}")
       return None

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskManager(InMemoryTaskManager):
-    """A TaskManager used for the Semantic Kernel Agent sample."""
+    """A TaskManager used for the AutoGen Candidate Evaluation Agent."""
 
     def __init__(self, notification_sender_auth: PushNotificationSenderAuth):
         """Initialize the TaskManager with a notification sender."""
@@ -55,7 +55,7 @@ class TaskManager(InMemoryTaskManager):
         try:
             agent_response = await self.agent.invoke(query, request.params.sessionId)
         except Exception as e:
-            logger.error(f"Semantic Kernel Task Manager error: {e}")
+            logger.error(f"AutoGen Task Manager error: {e}")
             raise ValueError(f"Agent error: {e}")
 
         return await self._process_agent_response(request, agent_response)
@@ -189,7 +189,7 @@ class TaskManager(InMemoryTaskManager):
         if not any(
             mode in AutogenAgent.SUPPORTED_CONTENT_TYPES for mode in request.params.acceptedOutputModes
         ):
-            logger.warning("Incompatible content type for SK Agent.")
+            logger.warning("Incompatible content type for AutoGen Agent.")
             return JSONRPCResponse(id=request.id, error=InvalidParamsError(message="Bad content type."))
         return None
 

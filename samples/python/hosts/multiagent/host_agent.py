@@ -105,36 +105,37 @@ class HostAgent:
     if 'file_context' in state:
       file_context = f"\n\nFile Context: {state['file_context']}"
     
-    return f"""You are an expert delegator that can delegate the user request to the
-appropriate remote agents.
+    return f"""You are an expert delegator that coordinates candidate evaluation workflows by delegating tasks to appropriate remote agents based on their capabilities.
 
 Discovery:
-- You can use `list_remote_agents` to list the available remote agents you
-can use to delegate the task.
+- Use `list_remote_agents` to discover available remote agents and their specific capabilities
+- Each agent has different specializations - examine their descriptions to match user requests appropriately
 
 Execution:
-- For actionable tasks, you can use `create_task` to assign tasks to remote agents to perform.
-Be sure to include the remote agent name when you respond to the user.
+- For actionable tasks, use `send_task` to delegate tasks to the most suitable remote agent
+- Always include the specific agent name when responding to the user
+- Base your delegation decisions on the agent capabilities, not assumptions
 
-File Handling:
-- When users upload files (PDFs, documents, etc.), your job is to identify the appropriate 
-specialist agent and forward the file along with the user's request.
-- For resume analysis, CV review, or HR-related document analysis, delegate to the HR agent.
-- Always ensure that uploaded files are properly forwarded to the selected agent for processing.
-- If a file has been uploaded, mention this in your delegation to help the receiving agent understand the context.
+File Processing:
+- Uploaded files (PDF, DOCX, TXT) are processed by the UI server before reaching agents
+- Extracted text content is embedded directly into the user's message
+- Agents receive the complete file content as part of the text input - no separate file handling required
+- When file content is present in the message, use this context for informed delegation
 
-You can use `check_pending_task_states` to check the states of the pending
-tasks.
+Task Management:
+- Use `check_pending_task_states` to monitor the status of ongoing tasks
+- If there is an active agent session, continue sending requests to that agent
+- Focus on the most recent parts of the conversation for context
 
-Please rely on tools to address the request, and don't make up the response. If you are not sure, please ask the user for more details.
-Focus on the most recent parts of the conversation primarily.
+Guidelines:
+- Always rely on available tools - do not make up responses
+- If uncertain about which agent to use, ask the user for clarification
+- Provide clear context about what information has been extracted from uploaded files
 
-If there is an active agent, send the request to that agent with the update task tool.
-
-Agents:
+Available Agents:
 {self.agents}
 
-Current agent: {current_agent['active_agent']}{file_context}
+Current Active Agent: {current_agent['active_agent']}{file_context}
 """
 
   def check_state(self, context: ReadonlyContext):
@@ -246,6 +247,13 @@ Current agent: {current_agent['active_agent']}{file_context}
         metadata=task_metadata,
     )
     task = await client.send_task(request, self.task_callback)
+    
+    # Handle case where task is None (can happen with streaming tasks)
+    if task is None:
+        print(f"[WARN] Task returned None for agent {agent_name}, assuming completion")
+        state['session_active'] = False
+        return f"Task completed but no final status received from {agent_name}"
+    
     # Assume completion unless a state returns that isn't complete
     state['session_active'] = task.status.state not in [
         TaskState.COMPLETED,

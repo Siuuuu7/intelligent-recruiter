@@ -69,8 +69,13 @@ class RemoteAgentConnections:
                     response.result.status.message["role"] = "agent" 
         
         if task_callback:
-          task = task_callback(response.result, self.card)
+          callback_result = task_callback(response.result, self.card)
+          if callback_result is not None:
+            task = callback_result
         if hasattr(response.result, 'final') and response.result.final:
+          # If this is the final response and we still don't have a task, create one from the response
+          if task is None and response.result:
+            task = response.result
           break
       return task
     else: # Non-streaming
