@@ -5,6 +5,8 @@ description = "Agent2Agent samples"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "autogen-agentchat>=0.7.1",
+    "autogen-ext>=0.7.1",
     "httpx>=0.28.1",
     "httpx-sse>=0.4.0",
     "jwcrypto>=1.5.6",

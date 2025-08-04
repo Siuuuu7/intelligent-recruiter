@@ -81,9 +81,26 @@ class AutogenAgent:
             model_client=self.client,
             handoffs=['InclusionRater'],
             description='Rate the technical expertise of the candidate.',
-            system_message=f'''You are a technical recruiter for the following job position:{JD_TECH}; 
-            Your task is to evaluate the technical expertise of candidates based on the resume as well as the interview talks and provide a rating from 1 to 10 as well as the reasons.
-            Be aware that some candidates may exaggerate their technical skills, for example, a candidate may claim to be a "Full Stack Developer" without any specific projects or technologies to back that claim.
+            system_message=f'''Rate technical skills 1-10 for SAP AI Scientist role.
+
+LOOK FOR:
+✓ Concrete projects: "Built ML pipeline processing 1M+ records daily"
+✓ Measurable impact: "Reduced API latency from 2s to 200ms"
+✓ Code examples or GitHub contributions
+✓ Teaching others (shows mastery)
+
+AVOID:
+✗ Buzzwords without substance: "AI expert" but can't explain basics
+✗ Vague claims: "Full-stack developer" with no specific tech stack
+✗ Resume stuffing: Lists 20+ technologies without depth
+
+EXAMPLES:
+- Good: "Led PyTorch migration, improved model accuracy by 15%"
+- Bad: "Experienced in machine learning and various frameworks"
+
+Focus ONLY on technical ability. Ignore background, education, or personal traits.
+
+Rate 1-10 with brief reasoning, then say "HANDOFF TO InclusionRater".
             ''',
         )
         inclusion_rater = AssistantAgent(
@@ -91,17 +108,56 @@ class AutogenAgent:
             model_client=self.client,
             handoffs=['Reporter'],
             description='Rate the inclusion and diversity background of the candidate.',
-            system_message=f'''You are a diversity and inclusion recruiter for the following job position:{JD_INCLUSION}; 
-            Your task is to evaluate the inclusion and diversity background of candidates based on the resume as well as the interview talks and provide a rating from 1 to 10 as well as the reasons.
-            Some candidates may exaggerate their diversity background, for example, a candidate may claim to be a "Proud Ally" without any specific actions or contributions to support that claim. Be aware.
+            system_message=f'''Rate inclusion potential 1-10 for diverse SAP team.
+
+LOOK FOR:
+✓ Mentored underrepresented people: "Coached 5 junior women developers"
+✓ Led diversity efforts: "Started company's first accessibility task force"
+✓ Cross-cultural work: "Managed teams across 4 countries"
+✓ Community involvement: "Volunteers teaching coding to refugees"
+
+AVOID:
+✗ Empty claims: "I support diversity" with no examples
+✗ Token mentions: Only highlights diversity when applying
+✗ Dismissive attitude: "Diversity shouldn't matter, only skills"
+
+EXAMPLES:
+- Good: "Organized unconscious bias training for 50+ engineers"
+- Bad: "I believe in equality and treat everyone the same"
+
+WATCH FOR BIAS:
+- Don't penalize career gaps (often caregiving)
+- Non-native speakers may communicate differently but contribute greatly
+- International backgrounds bring valuable perspectives
+
+Rate 1-10 with brief reasoning, then say "HANDOFF TO Reporter".
             ''',
         )
-        reporter =  AssistantAgent(
+        reporter = AssistantAgent(
             'Reporter',
             model_client=self.client,
-            description = 'Report the final rating of the candidate.',
-            system_message='''You are a reporter for the following job position: SAP AI Scientist;
-            Your task is to summarize the ratings from the Tech Rater and Inclusion Rater, and provide a final report on the candidate.
+            description='Report the final rating of the candidate.',
+            system_message='''Summarize both ratings for workshop discussion.
+
+FORMAT:
+**Technical Rating: X/10** - Brief reason
+**Inclusion Rating: Y/10** - Brief reason
+
+**Workshop Discussion Points:**
+- Are the ratings aligned or different? Why?
+- What biases might affect each evaluation?
+- Example: "High tech (9/10) but low inclusion (3/10) - shows technical skill but lacks diversity awareness"
+
+**Key Learning:**
+Point out one insight about inclusive hiring from this evaluation.
+
+EXAMPLES:
+- "Technical excellence may overshadow inclusion gaps"
+- "Career gaps unfairly penalized despite strong inclusion work"
+- "International background brings both technical and cultural value"
+
+Format as JSON: {"status": "completed", "message": "Your summary here"}
+Then say "TERMINATE".
             ''',
         )
         return [
@@ -113,8 +169,7 @@ class AutogenAgent:
         team = Swarm(
             name='CandidateEvaluationTeam',
             participants=self.agents,
-            termination_condition=TextMentionTermination("TERMINATE")
-,
+            termination_condition=TextMentionTermination("TERMINATE"),
         )
         return team
 
@@ -153,11 +208,14 @@ class AutogenAgent:
         # Reset team for new conversation
         await self.team.reset()
         
-        # Run the team with the query
-        result = await self.team.run(query)
+        # Run the team with streaming and get final result
+        result_stream = self.team.run_stream(task=query)
+        final_result = None
+        async for result in result_stream:
+            final_result = result
         
         # Extract response from the result
-        response = result.messages[-1].content if hasattr(result, 'messages') and result.messages else "I couldn't process your request."
+        response = final_result.messages[-1].content if hasattr(final_result, 'messages') and final_result.messages else "I couldn't process your request."
         
         # Store session data
         self.session_data[sessionId].append({'role': 'user', 'content': query})
@@ -176,18 +234,25 @@ class AutogenAgent:
         
         # Yield initial progress messages
         yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Starting candidate evaluation with multi-agent team...'}
-        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Tech Rater analyzing technical expertise...'}
-        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Inclusion Rater evaluating diversity background...'}
-        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Reporter generating final assessment...'}
         
-        # Run the team with the query
-        result = await self.team.run(query)
+        # Run the team with streaming
+        result_stream = self.team.run_stream(task=query)
+        final_response = None
         
-        # Extract response from the result
-        response = result.messages[-1].content if hasattr(result, 'messages') and result.messages else "I couldn't process your request."
+        async for result in result_stream:
+            # Extract current response
+            if hasattr(result, 'messages') and result.messages:
+                current_content = result.messages[-1].content
+                # Yield intermediate results
+                yield {'is_task_complete': False, 'require_user_input': False, 'content': current_content}
+                final_response = current_content
         
         # Store session data
-        self.session_data[sessionId].append({'role': 'assistant', 'content': response})
-        
-        # Yield final result
-        yield self._format_response(response)
+        if final_response:
+            self.session_data[sessionId].append({'role': 'assistant', 'content': final_response})
+            # Yield final result
+            yield self._format_response(final_response)
+        else:
+            error_msg = "No response received from the team."
+            self.session_data[sessionId].append({'role': 'assistant', 'content': error_msg})
+            yield {'is_task_complete': False, 'require_user_input': True, 'content': error_msg}
