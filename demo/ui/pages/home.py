@@ -7,7 +7,8 @@ from state.state import AppState
 
 @me.stateclass
 class PageState:
-    """ Local Page State"""
+    """Local Page State"""
+
     temp_name: str = ""
 
 
@@ -17,7 +18,9 @@ def on_blur_set_name(e: me.InputBlurEvent):
     state.temp_name = e.value
 
 
-def on_enter_change_name(e: me.components.input.input.InputEnterEvent):  # pylint: disable=unused-argument
+def on_enter_change_name(
+    e: me.components.input.input.InputEnterEvent,
+):  # pylint: disable=unused-argument
     """change name button handler"""
     state = me.state(PageState)
     app_state = me.state(AppState)
@@ -60,5 +63,6 @@ def home_page_content(app_state: AppState):
                     width="100%",
                 )
             ):
-                with header("Conversations", "message"): pass
+                with header("Conversations", "message"):
+                    pass
                 conversation_list(app_state.conversations)

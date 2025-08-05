@@ -1,5 +1,4 @@
 import mesop as me
-from mesop import SelectOption
 import pandas as pd
 from typing import List
 import uuid
@@ -8,6 +7,7 @@ from state.state import AppState
 from state.state import StateConversation
 from state.host_agent_service import CreateConversation
 from state.host_agent_service import ListRemoteAgents
+
 
 @me.page(
     path="/select_agent",
@@ -33,6 +33,7 @@ async def select_agent_page():
             style=me.Style(margin=me.Margin(bottom=10)),
         )
 
+
 async def start_conversation(agent_url: str):
     """Start a conversation with the selected agent."""
     app_state = me.state(AppState)
@@ -48,8 +49,11 @@ async def start_conversation(agent_url: str):
 
     app_state.conversations.append(conversation)
     app_state.messages = []
-    me.navigate("/conversation", query_params={"conversation_id": conversation.conversation_id})
+    me.navigate(
+        "/conversation", query_params={"conversation_id": conversation.conversation_id}
+    )
     yield
+
 
 @me.component
 def conversation_list(conversations: List[StateConversation]):
@@ -61,8 +65,8 @@ def conversation_list(conversations: List[StateConversation]):
         df_data["Status"].append("Open" if conversation.is_active else "Closed")
         df_data["Messages"].append(len(conversation.message_ids))
     df = pd.DataFrame(
-        pd.DataFrame(df_data),
-        columns=["ID", "Name", "Status", "Messages"])
+        pd.DataFrame(df_data), columns=["ID", "Name", "Status", "Messages"]
+    )
     with me.box(
         style=me.Style(
             display="flex",
@@ -71,15 +75,15 @@ def conversation_list(conversations: List[StateConversation]):
         )
     ):
         me.table(
-          df,
-          on_click=on_click,
-          header=me.TableHeader(sticky=True),
-          columns={
-            "ID": me.TableColumn(sticky=True),
-            "Name": me.TableColumn(sticky=True),
-            "Status": me.TableColumn(sticky=True),
-            "Messages": me.TableColumn(sticky=True),
-          },
+            df,
+            on_click=on_click,
+            header=me.TableHeader(sticky=True),
+            columns={
+                "ID": me.TableColumn(sticky=True),
+                "Name": me.TableColumn(sticky=True),
+                "Status": me.TableColumn(sticky=True),
+                "Messages": me.TableColumn(sticky=True),
+            },
         )
         with me.content_button(
             type="raised",
@@ -95,6 +99,7 @@ def conversation_list(conversations: List[StateConversation]):
         ):
             me.icon(icon="add")
 
+
 async def CreateRemoteConversation(agent_url: str) -> StateConversation:
     """Manually create a remote conversation locally."""
     new_id = str(uuid.uuid4())
@@ -103,7 +108,7 @@ async def CreateRemoteConversation(agent_url: str) -> StateConversation:
         conversation_name="Remote Agent Conversation",
         is_active=True,
         message_ids=[],
-        remote_agent_url=agent_url  # <-- important!
+        remote_agent_url=agent_url,  # <-- important!
     )
     app_state = me.state(AppState)
     app_state.conversations.append(conversation)
@@ -123,7 +128,10 @@ async def add_conversation(e: me.ClickEvent):
 
     # 🛠️ NEXT: pick a remote agent immediately
     from state.host_agent_service import pick_agent_using_chatgpt
-    remote_agent_url = await pick_agent_using_chatgpt("default")  # You can pass any default string here
+
+    remote_agent_url = await pick_agent_using_chatgpt(
+        "default"
+    )  # You can pass any default string here
 
     if not remote_agent_url:
         print("[ERROR] No remote agent available! Falling back to None.")
@@ -141,13 +149,17 @@ async def add_conversation(e: me.ClickEvent):
     app_state.conversations.append(new_conversation)
     app_state.messages = []
 
-    me.navigate("/conversation", query_params={"conversation_id": new_conversation.conversation_id})
+    me.navigate(
+        "/conversation",
+        query_params={"conversation_id": new_conversation.conversation_id},
+    )
     yield
 
+
 def on_click(e: me.TableClickEvent):
-  state = me.state(AppState)
-  conversation = state.conversations[e.row_index]
-  state.current_conversation_id = conversation.conversation_id
-  me.query_params.update({"conversation_id": conversation.conversation_id})
-  me.navigate("/conversation", query_params=me.query_params)
-  yield
+    state = me.state(AppState)
+    conversation = state.conversations[e.row_index]
+    state.current_conversation_id = conversation.conversation_id
+    me.query_params.update({"conversation_id": conversation.conversation_id})
+    me.navigate("/conversation", query_params=me.query_params)
+    yield

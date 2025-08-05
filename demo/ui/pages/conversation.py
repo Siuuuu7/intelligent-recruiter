@@ -12,12 +12,15 @@ def conversation_page(app_state: AppState):
     state = me.state(AppState)
     with page_scaffold():  # pylint: disable=not-context-manager
         with page_frame():
-          with header("Conversation", "chat"): pass
-          conversation()
+            with header("Conversation", "chat"):
+                pass
+            conversation()
+
+
 def handle_file_upload(e: me.UploadEvent):
     state = me.state(AppState)
     state.uploaded_file = {
         "name": e.file.name,
         "content": e.file.getvalue(),
-        "mime_type": e.file.mimeType
+        "mime_type": e.file.mimeType,
     }

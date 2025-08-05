@@ -16,10 +16,12 @@ page_json = [
     {"display": "Settings", "icon": "settings", "route": "/settings"},
 ]
 
+
 def on_sidenav_menu_click(e: me.ClickEvent):  # pylint: disable=unused-argument
     """Side navigation menu click handler"""
     state = me.state(AppState)
     state.sidenav_open = not state.sidenav_open
+
 
 def navigate_to(e: me.ClickEvent):
     """navigate to a specific page"""
@@ -31,6 +33,7 @@ def navigate_to(e: me.ClickEvent):
     s.current_page = page["route"]
     me.navigate(s.current_page)
     yield
+
 
 @me.component
 def sidenav(current_page: str):
@@ -82,7 +85,8 @@ def sidenav(current_page: str):
                     "Theme",
                     not app_state.sidenav_open,
                 )
-                #menu_item(10, "settings", "Settings", not app_state.sidenav_open)
+                # menu_item(10, "settings", "Settings", not app_state.sidenav_open)
+
 
 def menu_item(
     key: int,
