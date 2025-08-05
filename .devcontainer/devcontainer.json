@@ -1,0 +1,96 @@
+{
+  "name": "A2A (Agent2Agent) Development",
+  "dockerFile": "Dockerfile",
+  "context": "..",
+  
+  // Configure tool-specific properties.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-json",
+        "redhat.vscode-yaml",
+        "ms-vscode.remote-containers",
+        "GitHub.copilot",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "python.testing.pytestEnabled": true,
+        "typescript.preferences.useAliasesForRenames": false,
+        "files.associations": {
+          "*.json": "jsonc"
+        }
+      }
+    }
+  },
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [
+    12000,  // UI server
+    41241,  // Agent server
+    8000,   // FastAPI default
+    3000    // Common dev server
+  ],
+  
+  "portsAttributes": {
+    "12000": {
+      "label": "A2A UI Server",
+      "onAutoForward": "notify"
+    },
+    "41241": {
+      "label": "Agent Server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // Use 'postCreateCommand' to run commands after the container is created.
+  "postCreateCommand": ".devcontainer/post-create.sh",
+
+  // Configure tool-specific properties.
+  "remoteEnv": {
+    "PATH": "/usr/local/bin:${containerEnv:PATH}",
+    "PYTHONPATH": "/workspaces/a2a-1/samples/python:/workspaces/a2a-1/demo/ui:${containerEnv:PYTHONPATH}",
+    "NODE_ENV": "development"
+  },
+
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true,
+      "username": "vscode",
+      "userUid": "automatic",
+      "userGid": "automatic"
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "ppa": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": true,
+      "azureDnsAutoDetection": true,
+      "installDockerBuildx": true,
+      "version": "latest"
+    }
+  },
+
+  // Mount the workspace
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/a2a-1,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/a2a-1",
+
+  // Set container user
+  "remoteUser": "vscode",
+  
+  // Keep container running
+  "shutdownAction": "stopContainer"
+}

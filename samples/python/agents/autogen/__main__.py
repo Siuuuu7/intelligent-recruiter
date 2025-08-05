@@ -31,10 +31,10 @@ def main(host, port):
         ),
         tags=["rating", "candidate", "multi-agent", "technical", "inclusion"],
         examples=[
-            "Rate this candidate: John Walker; 3 years SRE at Apple, AI enthusiast, single dad.", 
+            "Rate this candidate: John Walker; 3 years SRE at Apple, AI enthusiast, single dad.",
             "Evaluate candidate: Maria Garcia; PhD in ML, 5 years at Google, active in women in tech.",
-            "Assess this profile: Alex Chen; Full-stack developer, open source contributor, bilingual."
-        ]
+            "Assess this profile: Alex Chen; Full-stack developer, open source contributor, bilingual.",
+        ],
     )
 
     agent_card = AgentCard(
@@ -58,8 +58,14 @@ def main(host, port):
 
     # Create the server
     task_manager = TaskManager(notification_sender_auth=notification_sender_auth)
-    server = A2AServer(agent_card=agent_card, task_manager=task_manager, host=host, port=port)
-    server.app.add_route("/.well-known/jwks.json", notification_sender_auth.handle_jwks_endpoint, methods=["GET"])
+    server = A2AServer(
+        agent_card=agent_card, task_manager=task_manager, host=host, port=port
+    )
+    server.app.add_route(
+        "/.well-known/jwks.json",
+        notification_sender_auth.handle_jwks_endpoint,
+        methods=["GET"],
+    )
 
     logger.info(f"Starting the AutoGen candidate rating agent server on {host}:{port}")
     server.start()

@@ -9,4 +9,4 @@ from agents.autogen.agent import AutogenAgent
 from agents.autogen.task_manager import TaskManager
 
 
-__all__ = ['TaskManager', 'AutogenAgent']
+__all__ = ["TaskManager", "AutogenAgent"]

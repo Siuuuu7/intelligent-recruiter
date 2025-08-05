@@ -10,7 +10,7 @@ from autogen_agentchat.teams import Swarm
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 
-JD_TECH = '''SAP AI Scientist; Key Technical Responsibilities
+JD_TECH = """SAP AI Scientist; Key Technical Responsibilities
 
 LLM Application Development: Design, develop, and optimize large language model applications for enterprise use cases; research and implement state-of-the-art NLP techniques including fine-tuning, prompt engineering, and retrieval-augmented generation (RAG)
 Full-Stack Development: Build end-to-end AI-powered applications from concept to production deployment; develop robust APIs, microservices, and intuitive user interfaces using modern web technologies
@@ -25,9 +25,9 @@ Programming: Proficiency in Python, with experience in PyTorch/TensorFlow, Huggi
 Full-Stack Skills: Strong skills in web development (JavaScript/TypeScript, React/Vue.js, Node.js) and cloud platforms (AWS/Azure/GCP)
 Data Systems: Experience with SQL/NoSQL databases, vector databases for embedding storage
 DevOps: Familiarity with containerization (Docker/Kubernetes), CI/CD pipelines, and MLOps practices
-Fast Learning Ability: Demonstrated capacity to quickly master new technologies, frameworks, and research domains'''
+Fast Learning Ability: Demonstrated capacity to quickly master new technologies, frameworks, and research domains"""
 
-JD_INCLUSION = '''SAP AI Scientist; Key Inclusion Responsibilities
+JD_INCLUSION = """SAP AI Scientist; Key Inclusion Responsibilities
 
 Foster Diverse Perspectives: Actively promote and support diverse viewpoints in team discussions, research directions, and solution development
 Mentorship & Development: Guide junior team members from various backgrounds, ensuring equal growth opportunities and knowledge sharing
@@ -41,7 +41,7 @@ Cultural Competency: Demonstrated awareness and respect for different cultural b
 Inclusive Leadership: Experience creating psychologically safe environments where all team members feel valued and heard
 Bias Recognition: Understanding of various types of bias (algorithmic, cognitive, cultural) and proven ability to implement mitigation strategies
 Communication Skills: Excellent verbal and written communication in both English and Chinese, with ability to adapt communication style for diverse audiences
-Collaborative Mindset: Track record of successful cross-functional teamwork and building bridges across different groups and perspectives'''
+Collaborative Mindset: Track record of successful cross-functional teamwork and building bridges across different groups and perspectives"""
 
 DEFAULT_API_VERSION = "2025-03-01-preview"
 MODEL = "gpt-4o"
@@ -51,14 +51,14 @@ load_dotenv()
 class ResponseFormat(BaseModel):
     """Respond to the user in this format."""
 
-    status: Literal['input_required', 'completed', 'error'] = 'input_required'
+    status: Literal["input_required", "completed", "error"] = "input_required"
     message: str
 
 
 class AutogenAgent:
     """A multi-agent candidate evaluation system using AutoGen."""
 
-    SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
+    SUPPORTED_CONTENT_TYPES = ["text", "text/plain"]
 
     def __init__(self):
         self.client = self._get_client()
@@ -77,11 +77,11 @@ class AutogenAgent:
 
     def _create_agents(self):
         tech_rater = AssistantAgent(
-            'TechRater',
+            "TechRater",
             model_client=self.client,
-            handoffs=['InclusionRater'],
-            description='Rate the technical expertise of the candidate.',
-            system_message=f'''Rate technical skills 1-10 for SAP AI Scientist role.
+            handoffs=["InclusionRater"],
+            description="Rate the technical expertise of the candidate.",
+            system_message=f"""Rate technical skills 1-10 for SAP AI Scientist role.
 
 LOOK FOR:
 ✓ Concrete projects: "Built ML pipeline processing 1M+ records daily"
@@ -101,14 +101,14 @@ EXAMPLES:
 Focus ONLY on technical ability. Ignore background, education, or personal traits.
 
 Rate 1-10 with brief reasoning, then say "HANDOFF TO InclusionRater".
-            ''',
+            """,
         )
         inclusion_rater = AssistantAgent(
-            'InclusionRater',
+            "InclusionRater",
             model_client=self.client,
-            handoffs=['Reporter'],
-            description='Rate the inclusion and diversity background of the candidate.',
-            system_message=f'''Rate inclusion potential 1-10 for diverse SAP team.
+            handoffs=["Reporter"],
+            description="Rate the inclusion and diversity background of the candidate.",
+            system_message=f"""Rate inclusion potential 1-10 for diverse SAP team.
 
 LOOK FOR:
 ✓ Mentored underrepresented people: "Coached 5 junior women developers"
@@ -129,45 +129,42 @@ WATCH FOR BIAS:
 - Don't penalize career gaps (often caregiving)
 - Non-native speakers may communicate differently but contribute greatly
 - International backgrounds bring valuable perspectives
+- Age bias: Don't favor younger candidates or penalize older experienced professionals
+- Gender assumptions: Avoid assuming technical aptitude based on gender
+- Educational prestige: Focus on skills over school rankings (985/211 vs others)
+- Regional bias: Don't favor candidates from Tier 1 cities over smaller cities
+- Appearance/photo bias: If photos provided, ignore physical appearance
+- Marital/family status: Don't penalize based on relationship or parental status
+- Personality bias: Introverts can be excellent technical contributors
+- English proficiency: Strong English != better technical skills
 
 Rate 1-10 with brief reasoning, then say "HANDOFF TO Reporter".
-            ''',
+            """,
         )
         reporter = AssistantAgent(
-            'Reporter',
+            "Reporter",
             model_client=self.client,
-            description='Report the final rating of the candidate.',
-            system_message='''Summarize both ratings for workshop discussion.
+            description="Report the final rating of the candidate.",
+            system_message="""Summarize both ratings for workshop discussion.
 
 FORMAT:
+Format as JSON: {"status": "completed", "message": "
 **Technical Rating: X/10** - Brief reason
-**Inclusion Rating: Y/10** - Brief reason
-
-**Workshop Discussion Points:**
-- Are the ratings aligned or different? Why?
-- What biases might affect each evaluation?
-- Example: "High tech (9/10) but low inclusion (3/10) - shows technical skill but lacks diversity awareness"
-
-**Key Learning:**
-Point out one insight about inclusive hiring from this evaluation.
-
-EXAMPLES:
-- "Technical excellence may overshadow inclusion gaps"
-- "Career gaps unfairly penalized despite strong inclusion work"
-- "International background brings both technical and cultural value"
-
-Format as JSON: {"status": "completed", "message": "Your summary here"}
+**Inclusion Rating: Y/10** - Brief reason"}
+where X and Y are the ratings from TechRater and InclusionRater and 
+brief reasons are concise explanations of the ratings.
 Then say "TERMINATE".
-            ''',
+            """,
         )
         return [
             tech_rater,
             inclusion_rater,
             reporter,
         ]
+
     def _create_team(self):
         team = Swarm(
-            name='CandidateEvaluationTeam',
+            name="CandidateEvaluationTeam",
             participants=self.agents,
             termination_condition=TextMentionTermination("TERMINATE"),
         )
@@ -175,84 +172,115 @@ Then say "TERMINATE".
 
     def _format_response(self, response: str) -> dict[str, Any]:
         try:
-            response_lines = response.strip().split('\n')
+            response_lines = response.strip().split("\n")
             json_content = None
             for line in response_lines:
                 if '{"status":' in line or '"status":' in line:
                     try:
-                        start = line.find('{')
-                        end = line.rfind('}') + 1
+                        start = line.find("{")
+                        end = line.rfind("}") + 1
                         content = line[start:end]
                         parsed = json.loads(content)
-                        if 'status' in parsed and 'message' in parsed:
-                            status = parsed['status']
-                            message = parsed['message']
+                        if "status" in parsed and "message" in parsed:
+                            status = parsed["status"]
+                            message = parsed["message"]
                             return {
-                                'is_task_complete': status == 'completed',
-                                'require_user_input': status == 'input_required',
-                                'content': message,
+                                "is_task_complete": status == "completed",
+                                "require_user_input": status == "input_required",
+                                "content": message,
                             }
                     except json.JSONDecodeError:
                         continue
-            if 'i need more information' in response.lower():
-                return {'is_task_complete': False, 'require_user_input': True, 'content': response}
-            return {'is_task_complete': True, 'require_user_input': False, 'content': response}
+            if "i need more information" in response.lower():
+                return {
+                    "is_task_complete": False,
+                    "require_user_input": True,
+                    "content": response,
+                }
+            return {
+                "is_task_complete": True,
+                "require_user_input": False,
+                "content": response,
+            }
         except Exception as e:
-            return {'is_task_complete': False, 'require_user_input': True,
-                    'content': f'Error processing response: {e}\nOriginal response: {response}'}
+            return {
+                "is_task_complete": False,
+                "require_user_input": True,
+                "content": f"Error processing response: {e}\nOriginal response: {response}",
+            }
 
     async def invoke(self, query: str, sessionId: str) -> dict[str, Any]:
         if sessionId not in self.session_data:
             self.session_data[sessionId] = []
-        
+
         # Reset team for new conversation
         await self.team.reset()
-        
+
         # Run the team with streaming and get final result
         result_stream = self.team.run_stream(task=query)
         final_result = None
         async for result in result_stream:
             final_result = result
-        
+
         # Extract response from the result
-        response = final_result.messages[-1].content if hasattr(final_result, 'messages') and final_result.messages else "I couldn't process your request."
-        
+        response = (
+            final_result.messages[-1].content
+            if hasattr(final_result, "messages") and final_result.messages
+            else "I couldn't process your request."
+        )
+
         # Store session data
-        self.session_data[sessionId].append({'role': 'user', 'content': query})
-        self.session_data[sessionId].append({'role': 'assistant', 'content': response})
-        
+        self.session_data[sessionId].append({"role": "user", "content": query})
+        self.session_data[sessionId].append({"role": "assistant", "content": response})
+
         return self._format_response(response)
 
     async def stream(self, query: str, sessionId: str) -> AsyncIterable[dict[str, Any]]:
         if sessionId not in self.session_data:
             self.session_data[sessionId] = []
-        
-        self.session_data[sessionId].append({'role': 'user', 'content': query})
-        
+
+        self.session_data[sessionId].append({"role": "user", "content": query})
+
         # Reset team for new conversation
         await self.team.reset()
-        
+
         # Yield initial progress messages
-        yield {'is_task_complete': False, 'require_user_input': False, 'content': 'Starting candidate evaluation with multi-agent team...'}
-        
+        yield {
+            "is_task_complete": False,
+            "require_user_input": False,
+            "content": "Starting candidate evaluation with multi-agent team...",
+        }
+
         # Run the team with streaming
         result_stream = self.team.run_stream(task=query)
         final_response = None
-        
+
         async for result in result_stream:
             # Extract current response
-            if hasattr(result, 'messages') and result.messages:
+            if hasattr(result, "messages") and result.messages:
                 current_content = result.messages[-1].content
                 # Yield intermediate results
-                yield {'is_task_complete': False, 'require_user_input': False, 'content': current_content}
+                yield {
+                    "is_task_complete": False,
+                    "require_user_input": False,
+                    "content": current_content,
+                }
                 final_response = current_content
-        
+
         # Store session data
         if final_response:
-            self.session_data[sessionId].append({'role': 'assistant', 'content': final_response})
+            self.session_data[sessionId].append(
+                {"role": "assistant", "content": final_response}
+            )
             # Yield final result
             yield self._format_response(final_response)
         else:
             error_msg = "No response received from the team."
-            self.session_data[sessionId].append({'role': 'assistant', 'content': error_msg})
-            yield {'is_task_complete': False, 'require_user_input': True, 'content': error_msg}
+            self.session_data[sessionId].append(
+                {"role": "assistant", "content": error_msg}
+            )
+            yield {
+                "is_task_complete": False,
+                "require_user_input": True,
+                "content": error_msg,
+            }

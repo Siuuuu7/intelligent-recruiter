@@ -36,7 +36,7 @@ class TaskManager(InMemoryTaskManager):
 
     async def on_send_task(self, request: SendTaskRequest) -> SendTaskResponse:
         """A method to handle a task request.
-        
+
         Args:
             request: The task request containing the parameters.
 
@@ -48,11 +48,13 @@ class TaskManager(InMemoryTaskManager):
             return SendTaskResponse(id=request.id, error=validation_error.error)
 
         await self.upsert_task(request.params)
-        task = await self.update_store(request.params.id, TaskStatus(state=TaskState.WORKING), None)
+        task = await self.update_store(
+            request.params.id, TaskStatus(state=TaskState.WORKING), None
+        )
         await self.send_task_notification(task)
 
         query = request.params.message.parts[0].text
-        
+
         try:
             agent_response = await self.agent.invoke(query, request.params.sessionId)
             # Print background check agent response to terminal
@@ -60,7 +62,9 @@ class TaskManager(InMemoryTaskManager):
             print(f"BACKGROUND CHECK AGENT RESPONSE:")
             print(f"{'='*60}")
             print(f"Content: {agent_response.get('content', 'No content')}")
-            print(f"Require User Input: {agent_response.get('require_user_input', False)}")
+            print(
+                f"Require User Input: {agent_response.get('require_user_input', False)}"
+            )
             print(f"Task Complete: {agent_response.get('is_task_complete', False)}")
             print(f"{'='*60}\n")
         except Exception as e:
@@ -73,7 +77,7 @@ class TaskManager(InMemoryTaskManager):
         self, request: SendTaskStreamingRequest
     ) -> AsyncIterable[SendTaskStreamingResponse] | JSONRPCResponse:
         """A method to handle a task streaming request.
-        
+
         Args:
             request: The task streaming request containing the parameters.
 
@@ -96,9 +100,11 @@ class TaskManager(InMemoryTaskManager):
                 error=InternalError(message="Error in streaming response"),
             )
 
-    async def _run_streaming_agent(self, request: SendTaskStreamingRequest) -> AsyncIterable[SendTaskStreamingResponse]:
+    async def _run_streaming_agent(
+        self, request: SendTaskStreamingRequest
+    ) -> AsyncIterable[SendTaskStreamingResponse]:
         """A method to run the streaming agent.
-        
+
         Args:
             request: The task streaming request containing the parameters.
 
@@ -107,13 +113,13 @@ class TaskManager(InMemoryTaskManager):
         """
         try:
             query = request.params.message.parts[0].text
-            
+
             async for partial in self.agent.stream(query, request.params.sessionId):
                 require_input = partial["require_user_input"]
                 is_done = partial["is_task_complete"]
                 text_content = partial["content"]
                 artifact = None
-                
+
                 # Print Check agent streaming response to terminal
                 print(f"\n{'='*40}")
                 print(f"Background Check AGENT STREAMING RESPONSE:")
@@ -137,7 +143,11 @@ class TaskManager(InMemoryTaskManager):
                     final = True
                 elif is_done:
                     new_status.state = TaskState.COMPLETED
-                    artifact = Artifact(parts=[{"type": "text", "text": text_content}], index=0, append=False)
+                    artifact = Artifact(
+                        parts=[{"type": "text", "text": text_content}],
+                        index=0,
+                        append=False,
+                    )
                     # End the stream if the agent is fully done
                     final = True
                 else:
@@ -156,12 +166,16 @@ class TaskManager(InMemoryTaskManager):
                     )
 
                 # Persist + notify
-                updated_task = await self.update_store(request.params.id, new_status, [artifact] if artifact else None)
+                updated_task = await self.update_store(
+                    request.params.id, new_status, [artifact] if artifact else None
+                )
                 await self.send_task_notification(updated_task)
 
                 await self.enqueue_events_for_sse(
                     request.params.id,
-                    TaskStatusUpdateEvent(id=request.params.id, status=new_status, final=final),
+                    TaskStatusUpdateEvent(
+                        id=request.params.id, status=new_status, final=final
+                    ),
                 )
 
                 if final:
@@ -173,9 +187,11 @@ class TaskManager(InMemoryTaskManager):
                 request.params.id, InternalError(message=f"Error while streaming: {e}")
             )
 
-    async def _process_agent_response(self, request: SendTaskRequest, agent_response: dict) -> SendTaskResponse:
+    async def _process_agent_response(
+        self, request: SendTaskRequest, agent_response: dict
+    ) -> SendTaskResponse:
         """Process the agent's response and update the task status.
-        
+
         Args:
             request: The task request containing the parameters.
             agent_response: The response from the agent.
@@ -185,18 +201,27 @@ class TaskManager(InMemoryTaskManager):
         """
         parts = [{"type": "text", "text": agent_response["content"]}]
         if agent_response["require_user_input"]:
-            task_status = TaskStatus(state=TaskState.INPUT_REQUIRED, message=Message(role="agent", parts=parts))
+            task_status = TaskStatus(
+                state=TaskState.INPUT_REQUIRED,
+                message=Message(role="agent", parts=parts),
+            )
         else:
             task_status = TaskStatus(state=TaskState.COMPLETED)
-        artifact = Artifact(parts=parts) if not agent_response["require_user_input"] else None
+        artifact = (
+            Artifact(parts=parts) if not agent_response["require_user_input"] else None
+        )
 
-        updated_task = await self.update_store(request.params.id, task_status, [artifact] if artifact else None)
+        updated_task = await self.update_store(
+            request.params.id, task_status, [artifact] if artifact else None
+        )
         await self.send_task_notification(updated_task)
         return SendTaskResponse(id=request.id, result=updated_task)
 
-    def _validate_request(self, request: SendTaskStreamingRequest) -> JSONRPCResponse | None:
+    def _validate_request(
+        self, request: SendTaskStreamingRequest
+    ) -> JSONRPCResponse | None:
         """Validate the request parameters.
-        
+
         Args:
             request: The task request containing the parameters.
 
@@ -206,15 +231,18 @@ class TaskManager(InMemoryTaskManager):
         if not request.params.acceptedOutputModes:
             return None
         if not any(
-            mode in BackgroundCheckAgent.SUPPORTED_CONTENT_TYPES for mode in request.params.acceptedOutputModes
+            mode in BackgroundCheckAgent.SUPPORTED_CONTENT_TYPES
+            for mode in request.params.acceptedOutputModes
         ):
             logger.warning("Incompatible content type for Background Check Agent.")
-            return JSONRPCResponse(id=request.id, error=InvalidParamsError(message="Bad content type."))
+            return JSONRPCResponse(
+                id=request.id, error=InvalidParamsError(message="Bad content type.")
+            )
         return None
 
     async def send_task_notification(self, task: SendTaskRequest) -> None:
         """Send a push notification for the task.
-        
+
         Args:
             task: The task object containing the parameters.
         """

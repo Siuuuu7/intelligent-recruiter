@@ -100,7 +100,7 @@ class TaskStatusUpdateEvent(BaseModel):
 
 class TaskArtifactUpdateEvent(BaseModel):
     id: str
-    artifact: Artifact    
+    artifact: Artifact
     metadata: dict[str, Any] | None = None
 
 
@@ -362,4 +362,3 @@ class A2AClientJSONError(A2AClientError):
 class MissingAPIKeyError(Exception):
     """Exception for missing API key."""
 
-    pass

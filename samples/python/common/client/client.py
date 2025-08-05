@@ -25,9 +25,9 @@ import json
 class A2AClient:
     def __init__(self, agent_card: AgentCard = None, url: str = None):
         if agent_card:
-            raw_url  = agent_card.url
+            raw_url = agent_card.url
         elif url:
-            raw_url  = url
+            raw_url = url
         else:
             raise ValueError("Must provide either agent_card or url")
 
@@ -37,8 +37,11 @@ class A2AClient:
     def _normalize_url(self, url: str) -> str:
         """Ensure URL is clean: remove invisibles, strip spaces, ensure trailing /."""
         import re
+
         url = url.strip()
-        url = re.sub(r"[\u200B-\u200F\u2060-\u206F]", "", url)  # remove weird unicode invisibles
+        url = re.sub(
+            r"[\u200B-\u200F\u2060-\u206F]", "", url
+        )  # remove weird unicode invisibles
         if not url.endswith("/"):
             url += "/"
         return url

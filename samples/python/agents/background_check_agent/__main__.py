@@ -30,9 +30,9 @@ def main(host, port):
         ),
         tags=["background-check", "verification", "credentials"],
         examples=[
-            "Verify this candidate: John Smith, graduated from MIT, worked at Google, claims AI project experience.", 
+            "Verify this candidate: John Smith, graduated from MIT, worked at Google, claims AI project experience.",
             "Check background: Jane Doe, Stanford PhD, Tesla engineer, published 10 papers on machine learning.",
-        ]
+        ],
     )
 
     agent_card = AgentCard(
@@ -55,8 +55,14 @@ def main(host, port):
 
     # Create the server
     task_manager = TaskManager(notification_sender_auth=notification_sender_auth)
-    server = A2AServer(agent_card=agent_card, task_manager=task_manager, host=host, port=port)
-    server.app.add_route("/.well-known/jwks.json", notification_sender_auth.handle_jwks_endpoint, methods=["GET"])
+    server = A2AServer(
+        agent_card=agent_card, task_manager=task_manager, host=host, port=port
+    )
+    server.app.add_route(
+        "/.well-known/jwks.json",
+        notification_sender_auth.handle_jwks_endpoint,
+        methods=["GET"],
+    )
 
     logger.info(f"Starting the Background Check agent server on {host}:{port}")
     server.start()
