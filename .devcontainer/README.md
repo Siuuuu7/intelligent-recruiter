@@ -67,7 +67,7 @@ Key environment variables in `.env`:
 
 **Dependencies missing?**
 - The post-create script installs everything automatically
-- If issues persist, run: `cd /workspaces/a2a-1 && .devcontainer/post-create.sh`
+- If issues persist, run: `cd /workspaces/intelligent-recruiter && .devcontainer/post-create.sh`
 
 **Port conflicts?**
 - Modify `forwardPorts` in `devcontainer.json` if needed
