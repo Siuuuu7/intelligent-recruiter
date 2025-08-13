@@ -12,9 +12,8 @@ A specialized multi-agent system for candidate evaluation built with AutoGen fra
 ## Setup
 
 ```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Using uv (recommended)
+uv sync
 ```
 
 ## Environment Variables
@@ -29,7 +28,7 @@ AZURE_OPENAI_ENDPOINT="your_azure_openai_endpoint"
 ## Running
 
 ```bash
-python -m agents.autogen
+uv run .
 ```
 
 The agent will start on port 10018 by default.
@@ -48,7 +47,7 @@ This multi-agent system consists of:
 - `agents/autogen/__main__.py`: Entry point and server setup
 - `agents/autogen/agent.py`: Core AutoGen multi-agent logic
 - `agents/autogen/task_manager.py`: A2A task management integration
-- `requirements.txt`: Dependencies
+- `pyproject.toml`: Dependencies
 - `README.md`: Usage guide
 
 ## Example Usage

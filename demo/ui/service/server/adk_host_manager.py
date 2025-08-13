@@ -343,9 +343,10 @@ class ADKHostManager(ApplicationManager):
                 system_instructions = (
                     "You MUST follow these rules strictly:\n\n"
                     "- You are a host agent for a recruitment team that routes messages to remote agents.\n"
+                    "- Use background check agent if user asks to check candidate's background. "
+                    "- Use AutoGen Candidate Rating Agent if user asks to rate a candidate.\n"
                     "- The user has added one or more remote agents to this system.\n"
                     "- You MUST NOT ask the user to pick an agent if `target_agent_url` exists.\n"
-                    "- DO NOT ask the user to confirm the agent. Decide yourself which agent to use.\n"
                     "- If `target_agent_url` exists in session state, IMMEDIATELY call the `send_task` tool using the user's input.\n"
                     "- DO NOT prompt or clarify. If `target_agent_url` is present, just call `send_task`.\n"
                     "- If no `target_agent_url` is present, THEN you may ask the user to select an agent.\n"

@@ -133,8 +133,9 @@ class ConversationServer:
 --- UPLOADED FILE CONTENT ({uploaded_file.filename}) ---
 {file_text}
 --- END OF FILE CONTENT ---
-
-Please analyze the above resume content and provide a detailed rating."""
+--- START OF INSTRUCTION ---
+Please analyze the above resume content and interview dialogue and provide a detailed response.
+--- END OF INSTRUCTION ---"""
 
                             # Update the message with enhanced text
                             message.parts = [TextPart(text=enhanced_text)]

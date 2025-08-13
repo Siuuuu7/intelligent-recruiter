@@ -17,7 +17,7 @@ def clean_content_for_display(content: str) -> str:
         # In normal mode, remove verbose file content markers
         # Remove the "--- UPLOADED FILE CONTENT ..." sections
         pattern = (
-            r"--- UPLOADED FILE CONTENT \([^)]+\) ---.*?--- END OF FILE CONTENT ---\s*"
+            r"--- UPLOADED FILE CONTENT \([^)]+\) ---.*?--- END OF INSTRUCTION ---\s*"
         )
         cleaned_content = re.sub(pattern, "", content, flags=re.DOTALL)
 

@@ -110,6 +110,31 @@ User provides additional context
 ❌ failed - Task encountered error
 ⊘ canceled - Task aborted
 
+### Real-World SAP A2A Implementation
+
+#### Scenario: Intelligent Procurement Workflow
+
+```mermaid
+sequenceDiagram
+    participant User as 👤 Procurement Manager
+    participant PA as 🛒 Purchase Agent (Ariba)
+    participant FA as 💰 Finance Agent (S/4HANA)
+    participant CA as ✅ Compliance Agent (GRC)
+    participant SA as 📊 Supplier Agent (External)
+
+    User->>PA: "Source 10K laptops under $800 each"
+    PA->>SA: Request supplier quotes
+    SA-->>PA: Return 5 qualified suppliers
+    PA->>FA: Validate budget availability
+    FA-->>PA: Confirm budget: $7.5M available
+    PA->>CA: Check compliance requirements
+    CA-->>PA: Flag: Need conflict of interest check
+    PA->>User: Present options with compliance notes
+    User->>PA: Approve Supplier #2
+    PA->>FA: Create purchase requisition
+    FA->>CA: Log approval for audit
+```
+
 
 ### 🌐 Protocol Wars - A2A vs MCP
 
@@ -219,8 +244,7 @@ flowchart TB
 ### Step 1: Environment Preparation
 ```bash
 # Clone the repository
-git clone https://github.com/google/A2A
-cd intelligent-recruiter
+git clone https://github.com/Siuuuu7/intelligent-recruiter
 
 # Set up Python environment
 uv python pin 3.12
@@ -276,7 +300,7 @@ uv run main.py
    - Background Check: `localhost:10019`
 4. ✅ Verify agents appear in the agent list
 
-## 🎭 Part 6: Live Demo - Transforming Recruitment Styles
+## 🎭 Part 5: Live Demo - Transforming Recruitment Styles
 
 ### Demo Scenario 1: Technical-Focused Recruitment
 
@@ -443,7 +467,7 @@ uv run main.py
 
 ---
 
-## 🌍 Part 7: Future Vision
+## 🌍 Part 6: Future Vision
 
 ### The Future of AI-Driven Recruitment
 
