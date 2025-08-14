@@ -342,16 +342,20 @@ class ADKHostManager(ApplicationManager):
 
                 system_instructions = (
                     "You MUST follow these rules strictly:\n\n"
-                    "- You are a host agent for a recruitment team that routes messages to remote agents.\n"
-                    "- Use background check agent if user asks to check candidate's background. "
-                    "- Use AutoGen Candidate Rating Agent if user asks to rate a candidate.\n"
-                    "- The user has added one or more remote agents to this system.\n"
+                    "- You are a host agent for a recruitment team that intelligently routes messages to remote agents.\n"
+                    "- ANALYZE user intent first. Look for keywords and context to automatically select the appropriate agent:\n"
+                    "  * Keywords like 'rate', 'rating', 'evaluate', 'assessment', 'score', 'rank' candidate → Use AutoGen Candidate Rating Agent\n"
+                    "  * Keywords like 'background check', 'verify background', 'criminal record', 'employment history' → Use background check agent\n"
+                    "  * If user mentions specific agent name → Use that agent\n"
+                    "- If you can identify the appropriate agent from user intent, automatically call `send_task` with the identified agent.\n"
                     "- You MUST NOT ask the user to pick an agent if `target_agent_url` exists.\n"
                     "- If `target_agent_url` exists in session state, IMMEDIATELY call the `send_task` tool using the user's input.\n"
                     "- DO NOT prompt or clarify. If `target_agent_url` is present, just call `send_task`.\n"
-                    "- If no `target_agent_url` is present, THEN you may ask the user to select an agent.\n"
+                    "- Only ask the user to select an agent if you cannot determine intent and no `target_agent_url` is present.\n"
                     "- If the user asks for a list of available agents, call `list_remote_agents`.\n"
-                    "- Otherwise, respond as you normally would."
+                    "- When receiving responses from remote agents, preserve ALL detailed information, analysis, and recommendations.\n"
+                    "- Provide summaries that include numerical and detailed analysis, and reasoning from the remote agent responses.\n"
+                    "- Never truncate or oversimplify the rich content provided by specialized agents."
                 )
                 print(
                     f"[DEBUG LOCK] State before Call 2: {session.state}, ID: {id(session.state)}"
@@ -921,9 +925,8 @@ class ADKHostManager(ApplicationManager):
                     if last_hist_msg.parts:
                         part = last_hist_msg.parts[0]
                         if part.type == "text":
-                            status_hint = part.text[:100] + (
-                                "..." if len(part.text) > 100 else ""
-                            )  # Truncate long hints
+                            # Show full content for status hints instead of truncating
+                            status_hint = part.text
                         else:
                             status_hint = f"Working ({part.type})..."
                     elif task.status.state != TaskState.WORKING:

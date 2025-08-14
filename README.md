@@ -235,11 +235,49 @@ flowchart TB
 ### Prerequisites Setup
 
 #### Required Environment:
-- Python 3.10+
+- Python 3.12+
 - Azure OpenAI credentials
 - Gemini credentials
 - UV package manager
 - Git repository access
+
+### Development Container Setup
+
+This project supports VS Code Dev Containers for a consistent development environment.
+
+#### Using Dev Container:
+1. **Prerequisites**: Install Docker and VS Code with Dev Containers extension
+2. **Open in Container**: 
+   ```bash
+   # Clone the repository
+   git clone https://github.com/Siuuuu7/intelligent-recruiter
+   cd intelligent-recruiter
+   
+   # Open in VS Code
+   code .
+   ```
+3. **Container Setup**: VS Code will prompt to "Reopen in Container" - click yes
+4. **Automatic Setup**: The container will automatically:
+   - Install Python 3.12 and UV package manager
+   - Set up the virtual environment
+   - Install all project dependencies
+   - Configure development tools
+
+#### Manual Container Build:
+```bash
+# Build the container manually
+docker build -t intelligent-recruiter-dev .devcontainer
+
+# Run the container
+docker run -it -v $(pwd):/workspace intelligent-recruiter-dev
+```
+
+#### Environment Variables in Container:
+Create `.env` file in the project root:
+```bash
+AZURE_OPENAI_TOKEN=your_token_here
+AZURE_OPENAI_ENDPOINT=your_endpoint_here
+```
 
 ### Step 1: Environment Preparation
 ```bash

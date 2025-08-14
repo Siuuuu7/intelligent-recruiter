@@ -4,7 +4,7 @@ A specialized multi-agent system for candidate evaluation built with AutoGen fra
 
 ## Prerequisites
 
-- Python 3.10 or higher
+- Python 3.12 or higher
 - `AZURE_OPENAI_TOKEN` environment variable set
 - `AZURE_OPENAI_ENDPOINT` environment variable set
 - A2A Python SDK (`a2a-sdk`)

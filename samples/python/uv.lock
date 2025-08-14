@@ -13,7 +13,6 @@ members = [
     "a2a-sample-client-cli",
     "a2a-sample-client-multiagent",
     "a2a-samples",
-    "a2a-semantic-kernel",
 ]
 
 [[package]]
@@ -124,23 +123,6 @@ dev = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "ruff", specifier = ">=0.11.2" },
-]
-
-[[package]]
-name = "a2a-semantic-kernel"
-version = "0.1.0"
-source = { editable = "agents/semantickernel" }
-dependencies = [
-    { name = "a2a-samples" },
-    { name = "azure-ai-inference" },
-    { name = "semantic-kernel" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "a2a-samples", editable = "." },
-    { name = "azure-ai-inference", specifier = ">=1.0.0b9" },
-    { name = "semantic-kernel", specifier = ">=1.28.0" },
 ]
 
 [[package]]

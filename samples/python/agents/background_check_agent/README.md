@@ -43,7 +43,7 @@ sequenceDiagram
 
 ## Prerequisites
 
-- Python 3.10 or higher
+- Python 3.12 or higher
 - [uv](https://docs.astral.sh/uv/)
 - Valid OpenAI/Azure OpenAI credentials. See [here](https://learn.microsoft.com/en-us/semantic-kernel/concepts/ai-services/chat-completion/?tabs=csharp-AzureOpenAI%2Cpython-AzureOpenAI%2Cjava-AzureOpenAI&pivots=programming-language-python#creating-a-chat-completion-service) for more details about Semantic Kernel AI connectors.
 
@@ -64,7 +64,7 @@ AZURE_OPENAI_ENDPOINT="your_azure_openai_endpoint"
 
 3. **Set up the Python Environment**:
 
-> Note: pin the Python version to your desired version (3.10+)
+> Note: pin the Python version to your desired version (3.12+)
 
 ```bash
 uv python pin 3.12

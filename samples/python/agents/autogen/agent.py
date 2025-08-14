@@ -149,10 +149,10 @@ Rate 1-10 with brief reasoning, then say "HANDOFF TO Reporter".
 
 FORMAT:
 Format as JSON: {"status": "completed", "message": "
-**Technical Rating: X/10** - Brief reason
-**Inclusion Rating: Y/10** - Brief reason"}
-where X and Y are the ratings from TechRater and InclusionRater and 
-brief reasons are concise explanations of the ratings.
+**Technical Rating: {tech_rate}/10** - {tech_rate_reason}
+**Inclusion Rating: {inclusion_rate}/10** - {inclusion_rate_reason}"}
+where tech_rate and inclusion_rate are the ratings from TechRater and InclusionRater and 
+tech_rate_reason and inclusion_rate_reason are concise explanations of the ratings.
 Then say "TERMINATE".
             """,
         )
