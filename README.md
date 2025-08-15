@@ -232,6 +232,41 @@ flowchart TB
 
 ## 🛠️ Part 4: Hands-On Journey - Step-by-Step Implementation
 
+### Quick Start: Light Demo Notebook
+
+For a quick interactive experience with the intelligent recruiter system, start with our Jupyter notebook demonstration:
+
+#### Running the Light Demo:
+```bash
+# Navigate to the project root
+cd /path/to/intelligent-recruiter
+
+# Install notebook requirements
+pip install -r requirements-notebook.txt
+
+# Launch Jupyter notebook
+jupyter notebook light_demo.ipynb
+```
+
+The `light_demo.ipynb` notebook provides:
+- 🎯 **Interactive candidate evaluation** with real examples
+- 📊 **Visualization of scoring results** from tech and inclusion raters  
+- 🔍 **Background verification demonstrations** with sample data
+- ⚡ **Quick setup** without complex agent orchestration
+- 🧪 **Experimentation environment** for testing different prompts and scenarios
+
+This notebook is perfect for:
+- Understanding the core evaluation logic
+- Testing different candidate profiles
+- Exploring bias detection capabilities  
+- Rapid prototyping of new features
+
+**💡 Pro Tip:** Run the light demo first to understand the system before proceeding with the full multi-agent setup below.
+
+---
+
+### Full System Setup
+
 ### Prerequisites Setup
 
 #### Required Environment:
